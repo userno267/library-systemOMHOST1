@@ -38,14 +38,11 @@ const app = express();
    Middleware
 =========================== */
 
-/* ================= Allowed Origins ================= */
-const allowedOrigins = [
-    "http://localhost:5173",
-  "http://localhost:5174",
-  "https://fugitively-untruthful-madalynn.ngrok-free.dev",
-  "https://unprogressively-noncognitive-karis.ngrok-free.dev",
-  "https://seclusion-stitch-shy.ngrok-free.dev",
-];
+/* ================= Allowed Origins (env-driven) ================= */
+const allowedOrigins = (process.env.FRONTEND_URLS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 /* ================= CORS FIX (IMPORTANT) ================= */
 app.use(
@@ -90,10 +87,9 @@ app.get("/api/proxy-image", (req, res) => {
     if (!imagePath) return res.status(400).send("Missing path");
 
     const fullPath = path.join(__dirname, "public", imagePath);
-    
+
     if (!fs.existsSync(fullPath)) return res.status(404).send("File not found");
 
-    // Set content type based on extension
     const ext = path.extname(fullPath).toLowerCase();
     let contentType = "application/octet-stream";
     if (ext === ".jpg" || ext === ".jpeg") contentType = "image/jpeg";
@@ -113,7 +109,6 @@ app.get("/api/proxy-image", (req, res) => {
 /* ===========================
    API Routes
 =========================== */
-// add with your other routes
 app.use("/api/fines", fineRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/books", bookRoutes);
@@ -128,8 +123,8 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/support", supportChatRoutes);
 app.use("/api/wishlist", wishlistRoutes);
-// register (with other routes)
 app.use("/api/attendance", attendanceRoutes);
+
 /* ===========================
    Test DB Connection
 =========================== */
@@ -149,17 +144,10 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: [
-        "http://localhost:5173",
-  "http://localhost:5174",
-      "https://fugitively-untruthful-madalynn.ngrok-free.dev",//your frontend 1 ngrok
-      "https://seclusion-stitch-shy.ngrok-free.dev", // your frontend 2 ngrok
-      "https://unprogressively-noncognitive-karis.ngrok-free.dev", // backend LocalTunnel
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });
-
 
 // Make io accessible in routes/controllers
 app.set("io", io);
@@ -179,7 +167,9 @@ io.on("connection", (socket) => {
       console.error(`❌ Join error for socket ${socket.id}:`, err);
     }
   });
-socket.on("joinConversation", (conversationId) => { socket.join(`conversation_${conversationId}`); });
+  socket.on("joinConversation", (conversationId) => {
+    socket.join(`conversation_${conversationId}`);
+  });
   socket.on("disconnect", (reason) => {
     console.log(`🔴 Client disconnected: ${socket.id}, reason: ${reason}`);
   });

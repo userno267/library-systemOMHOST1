@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 import sys
+import os
 import json
 import random
 from collections import defaultdict
@@ -16,10 +17,10 @@ from sentence_transformers import SentenceTransformer
 # ===============================
 # CONFIG
 # ===============================
-DB_USER = "root"
-DB_PASS = ""
-DB_HOST = "localhost"
-DB_NAME = "library_db"
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_NAME = os.getenv("DB_NAME")
 
 engine = create_engine(f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}")
 

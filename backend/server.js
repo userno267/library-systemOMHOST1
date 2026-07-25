@@ -40,24 +40,30 @@ const app = express();
 
 /* ================= Allowed Origins ================= */
 const allowedOrigins = [
-    "http://localhost:5173",
+  "http://localhost:5173",
   "http://localhost:5174",
   "https://fugitively-untruthful-madalynn.ngrok-free.dev",
   "https://unprogressively-noncognitive-karis.ngrok-free.dev",
   "https://seclusion-stitch-shy.ngrok-free.dev",
 ];
 
+// Allow any deployment/preview URL for this specific Vercel project while
+// iterating on hosting setup (project slug stays constant, the random
+// suffix changes per-deployment).
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // mobile apps / postman / server-to-server
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/library-system-omhost-1-lolk.*\.vercel\.app$/.test(origin)) return true;
+  return false;
+};
+
 /* ================= CORS FIX (IMPORTANT) ================= */
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow mobile apps / postman / server-to-server
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
-
       return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -149,13 +155,12 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: [
-        "http://localhost:5173",
-  "http://localhost:5174",
-      "https://fugitively-untruthful-madalynn.ngrok-free.dev",//your frontend 1 ngrok
-      "https://seclusion-stitch-shy.ngrok-free.dev", // your frontend 2 ngrok
-      "https://unprogressively-noncognitive-karis.ngrok-free.dev", // backend LocalTunnel
-    ],
+    origin: function (origin, callback) {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST"],
   },
 });

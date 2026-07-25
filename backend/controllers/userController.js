@@ -174,7 +174,7 @@ export const deleteUser = async (req, res) => {
     let profileImagePath = null;
 
     if (req.file) {
-      profileImagePath = `/uploads/profile/${req.file.filename}`;
+      profileImagePath = req.file.path;
     }
 
     await pool.query(   // ✅ CHANGE db -> pool

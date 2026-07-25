@@ -192,8 +192,10 @@ export default function UserBorrowPage() {
           <div className="book-grid">
             {paginatedCurrent.map((b) => {
               const coverUrl = b.cover_image
-                ? `${baseURL}${b.cover_image.startsWith("/") ? "" : "/"}${b.cover_image}`
-                : "/placeholder-book.png";
+  ? (b.cover_image.startsWith("http")
+      ? b.cover_image
+      : `${baseURL}${b.cover_image.startsWith("/") ? "" : "/"}${b.cover_image}`)
+  : "/placeholder-book.png";
 
               return (
                 <div key={b.id} className="book-card">
@@ -225,9 +227,11 @@ export default function UserBorrowPage() {
 
           <div className="book-grid">
             {paginatedHistory.map((b) => {
-              const coverUrl = b.cover_image
-                ? `${baseURL}${b.cover_image.startsWith("/") ? "" : "/"}${b.cover_image}`
-                : "/placeholder-book.png";
+             const coverUrl = b.cover_image
+  ? (b.cover_image.startsWith("http")
+      ? b.cover_image
+      : `${baseURL}${b.cover_image.startsWith("/") ? "" : "/"}${b.cover_image}`)
+  : "/placeholder-book.png";
 
               return (
                 <div key={b.id} className="book-card history">

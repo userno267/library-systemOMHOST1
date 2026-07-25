@@ -30,7 +30,11 @@ export default function ViewBook() {
 
   if (!book) return <p>Loading...</p>;
 
-  const coverUrl = book.cover_image ? `${API}${book.cover_image}` : "";
+const coverUrl = book.cover_image
+  ? (book.cover_image.startsWith("http")
+      ? book.cover_image
+      : `${API}${book.cover_image}`)
+  : "";
   const fileUrl = book.file_path ? `${API}${book.file_path}` : null;
   const fileName = book.file_path?.split("/").pop();
 

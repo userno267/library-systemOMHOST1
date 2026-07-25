@@ -141,8 +141,10 @@ export default function StudentHome() {
             {books.map((book) => {
               const id       = book.book_id ?? book.id;
               const coverUrl = book.cover_image
-                ? `${import.meta.env.VITE_API_URL}${book.cover_image}`
-                : "/placeholder-book.png";
+  ? (book.cover_image.startsWith("http")
+      ? book.cover_image
+      : `${import.meta.env.VITE_API_URL}${book.cover_image}`)
+  : "/placeholder-book.png";
 
               return (
                 <div key={id} className="book-card">

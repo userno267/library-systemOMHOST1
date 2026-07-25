@@ -50,7 +50,7 @@ router.get("/physical", getPBooks);
 import path from "path";
 import fs from "fs";
 import pool from "../db/db.js";
-router.get("/view/:id", auth,async (req, res) => {
+router.get("/view/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -63,24 +63,26 @@ router.get("/view/:id", auth,async (req, res) => {
       return res.status(404).send("File not found");
     }
 
-    const filePath = path.join(
-      process.cwd(),
-      "public",
-      rows[0].file_path
-    );
+    const filePath = rows[0].file_path;
 
-    if (!fs.existsSync(filePath)) {
+    // Cloudinary URL — redirect directly
+    if (filePath.startsWith("http")) {
+      return res.redirect(filePath);
+    }
+
+    // Old local file fallback
+    const fullPath = path.join(process.cwd(), "public", filePath);
+    if (!fs.existsSync(fullPath)) {
       return res.status(404).send("File missing");
     }
 
-    // ✅ REQUIRED HEADERS
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", "inline");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "*");
     res.setHeader("Accept-Ranges", "bytes");
 
-    fs.createReadStream(filePath).pipe(res);
+    fs.createReadStream(fullPath).pipe(res);
 
   } catch (err) {
     console.error("VIEW PDF ERROR:", err);

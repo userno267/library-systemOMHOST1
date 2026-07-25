@@ -105,8 +105,10 @@ export default function BrowseEbooks() {
         <div className="book-grid">
           {books.map((book) => {
             const coverUrl = book.cover_image
-              ? `${import.meta.env.VITE_API_URL}${book.cover_image}`
-              : "/placeholder-book.png";
+  ? (book.cover_image.startsWith("http")
+      ? book.cover_image
+      : `${import.meta.env.VITE_API_URL}${book.cover_image}`)
+  : "/placeholder-book.png";
 
             return (
               <div key={book.id} className="book-card">

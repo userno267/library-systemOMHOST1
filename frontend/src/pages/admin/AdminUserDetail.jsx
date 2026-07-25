@@ -32,9 +32,13 @@ export default function AdminUserDetail() {
         if (!resUser.ok) throw new Error("Failed user fetch");
         const userData = await resUser.json();
 
-        if (userData.profile_image) {
-          setPreview(encodeURI(`${baseURL}${userData.profile_image}`));
-        }
+       if (userData.profile_image) {
+  setPreview(
+    userData.profile_image.startsWith("http")
+      ? userData.profile_image
+      : encodeURI(`${baseURL}${userData.profile_image}`)
+  );
+}
 
         // Generate QR on the fly — no backend needed
         const qr = await QRCode.toDataURL(`USER:${userData.id}`, {

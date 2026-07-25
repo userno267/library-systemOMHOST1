@@ -110,13 +110,10 @@ const fetchBooks = useCallback(async () => {
 let coverUrl = "/placeholder-book.png";
 
 if (book.cover_image) {
-  const cleanedPath = book.cover_image.startsWith("/")
+  coverUrl = book.cover_image.startsWith("http")
     ? book.cover_image
-    : `/${book.cover_image}`;
-
-  coverUrl = `${baseUrl}${cleanedPath}`;
+    : `${baseUrl}${book.cover_image.startsWith("/") ? "" : "/"}${book.cover_image}`;
 }
-
 
             return (
               <div key={book.id} className="book-card">

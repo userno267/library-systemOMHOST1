@@ -51,13 +51,8 @@ export const addBook = async (req, res) => {
     const bookFile = req.files?.book_file?.[0];
     const coverImage = req.files?.cover_image?.[0];
 
-    const filePath = bookFile
-      ? `/uploads/books/${bookFile.filename}`
-      : null;
-
-    const coverPath = coverImage
-      ? `/uploads/covers/${coverImage.filename}`
-      : null;
+   const filePath = bookFile ? bookFile.path : null;
+const coverPath = coverImage ? coverImage.path : null;
 
     const finalCopies =
       type === "digital" ? 0 : Number(copies || 0);
@@ -481,13 +476,8 @@ export const updateBook = async (req, res) => {
         ? "available"
         : "unavailable";
 
-    const filePath = bookFile
-      ? `/uploads/books/${bookFile.filename}`
-      : existing[0].file_path;
-
-    const coverPath = coverImage
-      ? `/uploads/covers/${coverImage.filename}`
-      : existing[0].cover_image;
+  const filePath = bookFile ? bookFile.path : existing[0].file_path;
+const coverPath = coverImage ? coverImage.path : existing[0].cover_image;
 
     await db.query(
       `UPDATE books SET

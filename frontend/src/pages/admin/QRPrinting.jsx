@@ -204,9 +204,11 @@ useEffect(() => {
         <div className="book-list">
           {books.map((book) => {
             const isSelected = selectedBooks[book.id];
-            const coverURL = book.cover_image
-              ? `${baseURL}${book.cover_image}`
-              : "/placeholder.png";
+          const coverURL = book.cover_image
+  ? (book.cover_image.startsWith("http")
+      ? book.cover_image
+      : `${baseURL}${book.cover_image}`)
+  : "/placeholder.png";
 
             return (
               <div

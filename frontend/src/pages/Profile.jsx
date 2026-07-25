@@ -42,9 +42,11 @@ export default function Profile() {
         setBio(data.bio || "");
 
         if (data.profile_image) {
-          const fullURL = `${baseURL}${data.profile_image.startsWith("/") ? "" : "/"}${data.profile_image}`;
-          setPreview(fullURL);
-        } else {
+  const fullURL = data.profile_image.startsWith("http")
+    ? data.profile_image
+    : `${baseURL}${data.profile_image.startsWith("/") ? "" : "/"}${data.profile_image}`;
+  setPreview(fullURL);
+}else {
           setPreview("/default-avatar.png");
         }
 

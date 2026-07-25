@@ -3,6 +3,8 @@ uvicorn
 pandas
 numpy
 scikit-learn
-sentence-transformers
 sqlalchemy
 pymysql
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+sentence-transformers

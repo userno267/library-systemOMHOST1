@@ -12,8 +12,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from sentence_transformers import SentenceTransformer
-
 # ===============================
 # CONFIG
 # ===============================
@@ -26,6 +24,7 @@ DB_NAME = os.getenv("DB_NAME")
 engine = create_engine(
     f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
+
 DEBUG = False
 EVAL_MODE = len(sys.argv) > 2 and sys.argv[2] == "eval"
 
@@ -65,7 +64,7 @@ def clean_text(text):
     tokens = re.split(r"[\/,;]", text)
     return " ".join([t.strip().lower() for t in tokens if t.strip()])
 
-# 🔥 NEW: normalize title (remove volume info)
+# normalize title (remove volume info)
 def normalize_title(title):
     title = title.lower()
     title = re.sub(r'\b(vol|volume|book|part)\s*\d+\b', '', title)
@@ -85,12 +84,8 @@ df["combined_text"] = (
 )
 
 # ===============================
-# ML MODELS
+# ML MODEL: TF-IDF (content-based)
 # ===============================
-
-embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-embeddings = embed_model.encode(df["combined_text"].tolist(), show_progress_bar=False)
-
 tfidf = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=2)
 tfidf_matrix = tfidf.fit_transform(df["combined_text"])
 
@@ -166,13 +161,13 @@ def fallback_recommend(user_id, top_n=5):
     if not idxs:
         return []
 
-    user_vec = np.mean(tfidf_matrix[idxs].toarray(), axis=0)
+    user_vec = np.asarray(tfidf_matrix[idxs].mean(axis=0)).ravel()
     sims = cosine_similarity([user_vec], tfidf_matrix)[0]
     ranked = np.argsort(sims)[::-1]
 
     results = []
     used = set()
-    seen_titles = set()  # 🔥 NEW
+    seen_titles = set()
 
     for i in ranked:
         book_id = int(df.iloc[i]["id"])
@@ -198,9 +193,9 @@ def fallback_recommend(user_id, top_n=5):
     return results
 
 # ===============================
-# MAIN RECOMMENDER (HYBRID ML)
+# MAIN RECOMMENDER (HYBRID: TF-IDF + COLLABORATIVE)
 # ===============================
-def recommend_for_user(user_id, top_n=10, min_score=0.1, override_borrowed_ids=None):
+def recommend_for_user(user_id, top_n=10, min_score=0.05, override_borrowed_ids=None):
 
     if override_borrowed_ids is not None:
         borrowed = override_borrowed_ids
@@ -218,13 +213,13 @@ def recommend_for_user(user_id, top_n=10, min_score=0.1, override_borrowed_ids=N
 
     results = []
     used = set()
-    seen_titles = set()  # 🔥 NEW
+    seen_titles = set()
 
     # ===========================
-    # CONTENT-BASED (EMBEDDINGS)
+    # CONTENT-BASED (TF-IDF)
     # ===========================
-    user_vec = np.mean(embeddings[idxs], axis=0)
-    sims = cosine_similarity([user_vec], embeddings)[0]
+    user_vec = np.asarray(tfidf_matrix[idxs].mean(axis=0)).ravel()
+    sims = cosine_similarity([user_vec], tfidf_matrix)[0]
 
     for i in np.argsort(sims)[::-1]:
 
@@ -242,7 +237,7 @@ def recommend_for_user(user_id, top_n=10, min_score=0.1, override_borrowed_ids=N
         if sims[i] < min_score:
             continue
 
-        rec = format_book(book_id, sims[i], "content-ml", "semantic similarity")
+        rec = format_book(book_id, sims[i], "content-tfidf", "content similarity")
         if rec:
             results.append(rec)
             used.add(book_id)

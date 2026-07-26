@@ -1,24 +1,14 @@
 // backend/controllers/recommendationController.js
 
-import { spawn } from "child_process";
-import path from "path";
-import { fileURLToPath } from "url";
 import db from "../db/db.js";
 import { refreshForUser } from "../cron/recommendationCron.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
-
-const ML_SCRIPT         = path.join(__dirname, "../../ml_recommender/recommender.py");
-const PYTHON_CMD        = process.platform === "win32" ? "python" : "python3";
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL;
 const CACHE_STALE_HOURS = 7;
 
 // ─── Helper: read from cache ──────────────────────────────────────────────────
 
 async function getCachedRecommendations(userId) {
-  // ROW_NUMBER + PARTITION BY book_id keeps only the best-scoring row per book,
-  // in case recommendation_cache has duplicate (user_id, book_id) rows —
-  // see note in recommendationCron.js about the missing unique constraint.
   const [rows] = await db.query(
     `SELECT book_id, score, reason, computed_at, title, author, cover_image, section, copies
      FROM (
@@ -49,54 +39,33 @@ async function getCachedRecommendations(userId) {
   return rows;
 }
 
-// ─── Helper: run Python ML live ───────────────────────────────────────────────
+// ─── Helper: call the ML service live over HTTP ──────────────────────────────
 
 async function getLiveFallback(userId) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(PYTHON_CMD, [ML_SCRIPT, String(userId)], {
-      cwd: path.dirname(ML_SCRIPT),
-    });
+  if (!ML_SERVICE_URL) {
+    throw new Error("ML_SERVICE_URL not configured");
+  }
 
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout.on("data", (d) => (stdout += d.toString()));
-    proc.stderr.on("data", (d) => (stderr += d.toString()));
-
-    proc.on("close", async (code) => {
-      if (code !== 0) {
-        return reject(new Error(`Python exited ${code}: ${stderr.slice(0, 200)}`));
-      }
-
-      try {
-        const raw   = stdout.trim();
-        const start = raw.indexOf("[");
-        const end   = raw.lastIndexOf("]");
-        if (start === -1) return resolve([]);
-
-        const recs = JSON.parse(raw.slice(start, end + 1));
-        if (!recs.length) return resolve([]);
-
-        const bookIds = recs.map((r) => r.book_id);
-        const [books] = await db.query(
-          `SELECT id, title, author, cover_image, section, copies
-           FROM books WHERE id IN (?)`,
-          [bookIds]
-        );
-
-        const bookMap  = Object.fromEntries(books.map((b) => [b.id, b]));
-        const enriched = recs
-          .map((r) => ({ ...r, ...bookMap[r.book_id] }))
-          .filter((r) => r.title);
-
-        resolve(enriched);
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    proc.on("error", reject);
+  const res = await fetch(`${ML_SERVICE_URL}/recommend/${userId}?top_n=10`, {
+    method: "GET",
+    signal: AbortSignal.timeout(15000), // 15s timeout — free-tier services can be slow to wake
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ML service returned ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const recs = data.recommendations || [];
+
+  if (!recs.length) return [];
+
+  // recommender.py already returns title/author/cover_image/section directly,
+  // no need to re-join against the books table like the old spawn version did
+  return recs
+    .map((r) => ({ ...r, book_id: r.id }))
+    .filter((r) => r.title);
 }
 
 // ─── Main controller ──────────────────────────────────────────────────────────
@@ -119,14 +88,14 @@ export const getRecommendations = async (req, res) => {
       });
     }
 
-    // 2️⃣  Cache miss — run live ML, seed cache async for next visit
-    console.log(`[Recommendations] Cache miss for user ${userId}, running live ML...`);
+    // 2️⃣  Cache miss — call ML service live, seed cache async for next visit
+    console.log(`[Recommendations] Cache miss for user ${userId}, calling ML service...`);
 
     let live = [];
     try {
       live = await getLiveFallback(userId);
     } catch (mlErr) {
-      console.error("[Recommendations] Live ML failed:", mlErr.message);
+      console.error("[Recommendations] Live ML call failed:", mlErr.message);
     }
 
     if (live.length > 0) {
@@ -160,10 +129,10 @@ export const getRecommendations = async (req, res) => {
   }
 };
 
+// ─── Similar books (book detail page) — unchanged, no ML/Python involved ─────
 
-
-const SIMILAR_LIMIT       = 5;
-const SIMILAR_FROM_CACHE  = 2; // how many of the 5 slots can come from personalized cache
+const SIMILAR_LIMIT = 5;
+const SIMILAR_FROM_CACHE = 2;
 
 export const getSimilarBooks = async (req, res) => {
   const bookId = Number(req.params.id);
@@ -183,11 +152,8 @@ export const getSimilarBooks = async (req, res) => {
       return res.status(404).json({ message: "Book not found" });
     }
 
-    // 1️⃣  Personalized: this user's cached recs, excluding the book being viewed
     let personalized = [];
     if (userId) {
-      // ROW_NUMBER + PARTITION BY book_id ensures the same book can't be
-      // picked twice even if recommendation_cache has duplicate rows for it.
       const [rows] = await db.query(
         `SELECT book_id, title, author, cover_image, section, copies, reason
          FROM (
@@ -217,16 +183,11 @@ export const getSimilarBooks = async (req, res) => {
       personalized = rows;
     }
 
-    // 2️⃣  Fill remaining slots with same section / shared subjects
-    const remaining  = SIMILAR_LIMIT - personalized.length;
+    const remaining = SIMILAR_LIMIT - personalized.length;
     const excludeIds = [bookId, ...personalized.map((r) => r.book_id)];
 
     let sameSection = [];
     if (remaining > 0) {
-      // Uses EXISTS instead of a LEFT JOIN to book_subjects so each book
-      // produces exactly one row — no fan-out, no DISTINCT needed.
-      // (DISTINCT + ORDER BY RAND() on fanned-out rows is a known MySQL
-      // gotcha that can let duplicate book_ids slip past LIMIT.)
       const [rows] = await db.query(
         `SELECT
            b.id AS book_id,
@@ -255,8 +216,6 @@ export const getSimilarBooks = async (req, res) => {
       sameSection = rows;
     }
 
-    // Defensive de-dupe regardless of query-level cause — never show the
-    // same book_id twice in one response.
     const seen = new Set();
     const similar = [...personalized, ...sameSection]
       .filter((b) => {

@@ -160,13 +160,7 @@ export const getRecommendations = async (req, res) => {
   }
 };
 
-// ─── Similar books (book detail page) ─────────────────────────────────────────
-//
-// Cheap, synchronous, no Python/ML involved — safe to call on every page view.
-// Mixes:
-//   1) a couple of this user's already-cached personalized picks (if any),
-//   2) filled out with same section / shared-subject books,
-// capped at SIMILAR_LIMIT total.
+
 
 const SIMILAR_LIMIT       = 5;
 const SIMILAR_FROM_CACHE  = 2; // how many of the 5 slots can come from personalized cache

@@ -197,15 +197,13 @@ export const uploadBooksZip = async (req, res) => {
         let coverPath = null;
 
         if (imagePath) {
-          const fileName = Date.now() + "-" + path.basename(imagePath);
-          const dest = path.join("public/uploads/covers", fileName);
-
-          fs.copyFileSync(imagePath, dest);
-
-          coverPath = `/uploads/covers/${fileName}`;
-          lastCover = imagePath;
-
-          console.log("🖼️ matched:", fileName);
+         const uploadResult = await cloudinary.uploader.upload(imagePath, {
+  folder: "library/covers",
+  resource_type: "image",
+});
+coverPath = uploadResult.secure_url;
+lastCover = imagePath;
+console.log("🖼️ uploaded to cloudinary:", coverPath);
         }
 
         /* ===== LOGIC ===== */

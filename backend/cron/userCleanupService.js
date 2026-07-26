@@ -1,7 +1,7 @@
-import pool from "../db/db.js";
+import db from "../db/db.js";
 
 export const deleteUsersAndRelations = async (userIds) => {
-  const conn = await pool.getConnection();
+  const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();

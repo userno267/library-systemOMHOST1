@@ -1,13 +1,13 @@
 import cron from "node-cron";
 import { deleteUsersAndRelations } from "../cron/userCleanupService.js";
-import pool from "../db/db.js";
+import db from "../db/db.js";
 
 
 cron.schedule("0 2 * * *", async () => {
   try {
     console.log("🧹 Running auto-delete users job...");
 
-    const [users] = await pool.query(
+    const [users] = await db.query(
       `SELECT id FROM users
        WHERE role = 'student'
        AND created_at <= NOW() - INTERVAL 3 YEAR`

@@ -54,7 +54,6 @@ function SimilarBooks({ books, loading }) {
     </div>
   );
 }
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function BookDetail() {
   const { id } = useParams();

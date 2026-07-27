@@ -141,15 +141,16 @@ export default function AiAssistant({ apiUrl, token }) {
 
     try {
       const res = await axios.post(
-        apiUrl || "https://unprogressively-noncognitive-karis.ngrok-free.dev/api/chat",
-        { message: userText, sessionId: sessionIdRef.current },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+  apiUrl || `${import.meta.env.VITE_API_URL}/api/chat`,
+  { message: userText, sessionId: sessionIdRef.current },
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
+  }
+);
 
       const aiReply = res.data?.reply || "No response.";
       setMessages((prev) => [...prev, { role: "ai", text: aiReply }]);

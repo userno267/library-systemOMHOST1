@@ -15,7 +15,6 @@ function SimilarBooksSkeleton() {
     </div>
   );
 }
-
 function SimilarBooks({ books, loading }) {
   if (loading) {
     return (
@@ -33,11 +32,11 @@ function SimilarBooks({ books, loading }) {
       <h3>You might also like</h3>
       <div className="similar-grid">
         {books.map((b) => {
-         const coverUrl = book.cover_image
-  ? (book.cover_image.startsWith("http")
-      ? book.cover_image
-      : `${import.meta.env.VITE_API_URL}${book.cover_image}`)
-  : "/placeholder-book.png";
+          const coverUrl = b.cover_image
+            ? (b.cover_image.startsWith("http")
+                ? b.cover_image
+                : `${import.meta.env.VITE_API_URL}${b.cover_image}`)
+            : "/placeholder-book.png";
 
           return (
             <Link to={`/books/${b.book_id}`} className="similar-card" key={b.book_id}>

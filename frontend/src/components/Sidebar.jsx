@@ -123,133 +123,145 @@ export default function Sidebar() {
       </div>
 
       <style jsx>{`
-        .toggle-btn {
-          position: fixed;
-          top: 15px;
-          left: 15px;
-          background: #2e7d32;
-          border: none;
-          color: #fff;
-          padding: 10px;
-          border-radius: 12px;
-          z-index: 3000;
-          cursor: pointer;
-          transition: 0.2s ease;
-          -webkit-tap-highlight-color: transparent;
-        }
+  .toggle-btn {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    background: #2e7d32;
+    border: none;
+    color: #fff;
+    padding: 10px;
+    border-radius: 12px;
+    z-index: 3000;
+    cursor: pointer;
+    transition: 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-        .toggle-btn:hover {
-          transform: scale(1.05);
-        }
+  .toggle-btn:hover {
+    transform: scale(1.05);
+  }
 
-        .toggle-btn:focus,
-        .toggle-btn:focus-visible {
-          outline: none;
-          box-shadow: none;
-        }
+  .toggle-btn:focus,
+  .toggle-btn:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 
-        .overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.4);
-          z-index: 1500;
-          backdrop-filter: blur(2px);
-        }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1500;
+    backdrop-filter: blur(2px);
+  }
 
-        .sidebar {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 240px;
-          height: 100vh;
-          background: linear-gradient(180deg, #1b5e20, #66bb6a, #fdd835);
-          color: #fff;
-          padding-top: 70px;
-          transform: translateX(-100%);
-          transition: transform 0.3s ease;
-          z-index: 2000;
-        }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 240px;
+    height: 100vh;
+    background: linear-gradient(180deg, #1b5e20, #66bb6a, #fdd835);
+    color: #fff;
+    padding-top: 70px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 2000;
+    overflow-x: hidden;
+  }
 
-        .sidebar.open {
-          transform: translateX(0);
-        }
+  .sidebar.open {
+    transform: translateX(0);
+  }
 
-        .logo {
-          font-size: 1.5rem;
-          font-weight: 700;
-          text-align: center;
-          margin-bottom: 40px;
-          animation: fadeDown 0.4s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
+  .logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 40px;
+    animation: fadeDown 0.4s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
 
-        .admin-badge {
-          font-size: 0.6rem;
-          font-weight: 600;
-          background: rgba(255, 255, 255, 0.25);
-          border: 1px solid rgba(255, 255, 255, 0.4);
-          color: #fff;
-          padding: 2px 8px;
-          border-radius: 20px;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-        }
+  .admin-badge {
+    font-size: 0.6rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
 
-        .nav-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
+  .nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
 
-        .nav-list li {
-          margin: 6px 10px;
-        }
+  .nav-list li {
+    margin: 6px 10px;
+    display: flex;
+  }
 
-        .nav-list a,
-        .nav-list button {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          color: #fff;
-          text-decoration: none;
-          border-radius: 10px;
-          border: none;
-          background: transparent;
-          cursor: pointer;
-          transition: 0.2s ease;
-          font-size: 0.95rem;
-          -webkit-tap-highlight-color: transparent;
-        }
+  .nav-list a,
+  .nav-list button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    align-self: stretch;
+    flex: 1;
+    padding: 12px 16px;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: 0.2s ease;
+    font-size: 0.95rem;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-        .nav-list a:hover,
-        .nav-list button:hover {
-          background: rgba(10, 0, 0, 0.15);
-          transform: translateX(1px);
-        }
+  .nav-list a:hover,
+  .nav-list button:hover {
+    background: rgba(10, 0, 0, 0.15);
+    transform: translateX(1px);
+  }
 
-        .nav-list li.active a {
-          background: rgba(15, 0, 0, 0.25);
-          font-weight: 400;
-        }
+  .nav-list li.active a,
+  .nav-list li.active button {
+    background: rgba(15, 0, 0, 0.25);
+    font-weight: 400;
+  }
 
-        .nav-list a:focus,
-        .nav-list a:focus-visible,
-        .nav-list button:focus,
-        .nav-list button:focus-visible {
-          outline: none;
-          box-shadow: none;
-        }
+  .nav-list a:focus,
+  .nav-list a:focus-visible,
+  .nav-list button:focus,
+  .nav-list button:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 
-        @keyframes fadeDown {
-          from { opacity: 0; transform: translateY(-10px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+  @keyframes fadeDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`}</style>
     </>
   );
 }

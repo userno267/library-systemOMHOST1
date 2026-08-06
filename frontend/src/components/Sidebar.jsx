@@ -215,7 +215,7 @@ export default function Sidebar() {
           align-items: center;
           gap: 10px;
           padding: 12px 16px;
-          color: #fff;
+          color: #000000;
           text-decoration: none;
           border-radius: 10px;
           border: none;

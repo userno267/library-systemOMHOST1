@@ -135,10 +135,17 @@ export default function Sidebar() {
           z-index: 3000;
           cursor: pointer;
           transition: 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
         }
 
         .toggle-btn:hover {
           transform: scale(1.05);
+        }
+
+        .toggle-btn:focus,
+        .toggle-btn:focus-visible {
+          outline: none;
+          box-shadow: none;
         }
 
         .overlay {
@@ -216,6 +223,7 @@ export default function Sidebar() {
           cursor: pointer;
           transition: 0.2s ease;
           font-size: 0.95rem;
+          -webkit-tap-highlight-color: transparent;
         }
 
         .nav-list a:hover,
@@ -223,13 +231,12 @@ export default function Sidebar() {
           background: rgba(255, 255, 255, 0.15);
           transform: translateX(4px);
         }
-.nav-list li.active a {
+
+        .nav-list li.active a {
           background: rgba(255, 255, 255, 0.25);
           font-weight: 700;
         }
 
-        .toggle-btn:focus,
-        .toggle-btn:focus-visible,
         .nav-list a:focus,
         .nav-list a:focus-visible,
         .nav-list button:focus,

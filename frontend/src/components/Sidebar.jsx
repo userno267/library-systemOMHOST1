@@ -229,7 +229,7 @@ export default function Sidebar() {
         .nav-list a:hover,
         .nav-list button:hover {
           background: rgba(10, 0, 0, 0.15);
-          transform: translateX(2px);
+          transform: translateX(1px);
         }
 
         .nav-list li.active a {

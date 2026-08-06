@@ -234,7 +234,7 @@ export default function Sidebar() {
 
         .nav-list li.active a {
           background: rgba(15, 0, 0, 0.25);
-          font-weight: 500;
+          font-weight: 400;
         }
 
         .nav-list a:focus,

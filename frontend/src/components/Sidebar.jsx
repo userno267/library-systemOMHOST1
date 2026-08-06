@@ -215,7 +215,7 @@ export default function Sidebar() {
           align-items: center;
           gap: 10px;
           padding: 12px 16px;
-          color: #000000;
+          color: #fff;
           text-decoration: none;
           border-radius: 10px;
           border: none;
@@ -228,12 +228,12 @@ export default function Sidebar() {
 
         .nav-list a:hover,
         .nav-list button:hover {
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(10, 0, 0, 0.15);
           transform: translateX(4px);
         }
 
         .nav-list li.active a {
-          background: rgba(255, 255, 255, 0.25);
+          background: rgba(15, 0, 0, 0.25);
           font-weight: 700;
         }
 

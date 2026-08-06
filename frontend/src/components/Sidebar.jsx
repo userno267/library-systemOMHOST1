@@ -208,7 +208,7 @@ export default function Sidebar() {
           align-items: center;
           gap: 10px;
           padding: 12px 16px;
-          
+          color: #fff;
           text-decoration: none;
           border-radius: 10px;
           border: none;
@@ -223,10 +223,19 @@ export default function Sidebar() {
           background: rgba(255, 255, 255, 0.15);
           transform: translateX(4px);
         }
-
-        .nav-list li.active a {
+.nav-list li.active a {
           background: rgba(255, 255, 255, 0.25);
           font-weight: 700;
+        }
+
+        .toggle-btn:focus,
+        .toggle-btn:focus-visible,
+        .nav-list a:focus,
+        .nav-list a:focus-visible,
+        .nav-list button:focus,
+        .nav-list button:focus-visible {
+          outline: none;
+          box-shadow: none;
         }
 
         @keyframes fadeDown {

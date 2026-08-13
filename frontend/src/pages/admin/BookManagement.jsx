@@ -531,6 +531,11 @@ export default function BookManagement() {
           cursor: pointer; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
         }
+        .cover-img {
+          width: 100%; height: 100%; object-fit: cover;
+          display: block;
+          transition: transform 0.22s;
+        }
         .book-card:hover .cover-img { transform: scale(1.03); }
 
         /* Fallback placeholder (shown when img fails or missing) */

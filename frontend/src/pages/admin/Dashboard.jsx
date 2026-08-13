@@ -5,7 +5,8 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, ResponsiveContainer, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  RadialBarChart, RadialBar
+  RadialBarChart, RadialBar,
+  Treemap
 } from "recharts";
 import AdminSidebar from "../../components/AdminSidebar";
 
@@ -214,24 +215,15 @@ export default function Dashboard() {
 
                   {mlData?.subjectDemand?.length > 0 && (
                     <ResponsiveContainer width="100%" height={220}>
-                      <PieChart>
-                        <Pie
-                          data={mlData.subjectDemand}
-                          dataKey="total_borrows"
-                          nameKey="subject"
-                          innerRadius={55}
-                          outerRadius={90}
-                          paddingAngle={3}
-                          label={({ subject, percent }) => `${subject} ${(percent * 100).toFixed(0)}%`}
-                          labelLine={false}
-                        >
-                          {mlData.subjectDemand.map((_, i) => (
-                            <Cell key={i} fill={SUBJECT_COLORS[i % SUBJECT_COLORS.length]} />
-                          ))}
-                        </Pie>
+                      <Treemap
+                        data={mlData.subjectDemand}
+                        dataKey="total_borrows"
+                        nameKey="subject"
+                        stroke="#FAF6EE"
+                        content={<SubjectTreemapCell colors={SUBJECT_COLORS} />}
+                      >
                         <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                      </PieChart>
+                      </Treemap>
                     </ResponsiveContainer>
                   )}
 

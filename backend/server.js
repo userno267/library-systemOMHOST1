@@ -53,7 +53,7 @@ const allowedOrigins = [
 const isAllowedOrigin = (origin) => {
   if (!origin) return true; // mobile apps / postman / server-to-server
   if (allowedOrigins.includes(origin)) return true;
-  if (/^https:\/\/library-system-omhost-1-lolk.*\.vercel\.app$/.test(origin)) return true;
+if (/^https:\/\/library-system-omhost-1.*\.vercel\.app$/.test(origin)) return true;
   return false;
 };
 

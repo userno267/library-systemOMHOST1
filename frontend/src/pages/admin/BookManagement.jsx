@@ -7,6 +7,7 @@ const baseUrl = import.meta.env.VITE_API_URL;
 
 function coverUrl(book) {
   if (!book.cover_image) return null;
+  if (book.cover_image.startsWith("http")) return book.cover_image;
   return `${baseUrl}${book.cover_image.startsWith("/") ? "" : "/"}${book.cover_image}`;
 }
 
@@ -238,19 +239,29 @@ export default function BookManagement() {
                     />
                   </label>
 
+                  {/* ── Cover image area ── */}
                   <div className="book-cover" onClick={() => navigate(`/admin/books/${book.id}`)}>
-  {imgSrc && (
-    <img
-      src={imgSrc}
-      alt={`Cover of ${book.title}`}
-      className="cover-img"
-      onLoad={e  => { e.target.style.opacity = "1"; e.target.nextSibling.style.display = "none"; }}
-      onError={e => { e.target.style.display = "none"; }}
-      style={{ opacity: 0, transition: "opacity 0.2s" }}
-    />
-  )}
-  <BookPlaceholder title={book.title} />
-</div>
+                    {/* Placeholder always renders underneath; hidden by JS once img loads */}
+                    <div className="cover-placeholder-wrap">
+                      <BookPlaceholder title={book.title} />
+                    </div>
+                    {imgSrc && (
+                      <img
+                        src={imgSrc}
+                        alt={`Cover of ${book.title}`}
+                        className="cover-img"
+                        onLoad={e => {
+                          e.target.style.opacity = "1";
+                          const wrap = e.target.parentNode.querySelector(".cover-placeholder-wrap");
+                          if (wrap) wrap.style.display = "none";
+                        }}
+                        onError={e => {
+                          e.target.style.display = "none";
+                        }}
+                        style={{ opacity: 0, transition: "opacity 0.25s" }}
+                      />
+                    )}
+                  </div>
 
                   {/* ── Card body ── */}
                   <div className="book-body">
@@ -531,21 +542,25 @@ export default function BookManagement() {
           cursor: pointer; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
         }
-        .cover-img {
-          width: 100%; height: 100%; object-fit: cover;
-          display: block;
-          transition: transform 0.22s;
-        }
-        .book-card:hover .cover-img { transform: scale(1.03); }
-
-        /* Fallback placeholder (shown when img fails or missing) */
-        .book-placeholder {
+        /* Placeholder always fills the cover area */
+        .cover-placeholder-wrap {
           position: absolute; inset: 0;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .book-placeholder {
           display: flex; flex-direction: column;
           align-items: center; justify-content: center; gap: 10px;
+          width: 100%; height: 100%;
         }
-        /* Hide placeholder when real img loaded */
-        .cover-img + .book-placeholder { display: none; }
+
+        /* Cover img sits on top of placeholder via absolute positioning */
+        .cover-img {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%; object-fit: cover;
+          display: block;
+          transition: transform 0.22s, opacity 0.25s;
+        }
+        .book-card:hover .cover-img { transform: scale(1.03); }
 
         .book-initial {
           font-family: 'Fraunces', serif;

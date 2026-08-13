@@ -238,18 +238,19 @@ export default function BookManagement() {
                     />
                   </label>
 
-                  {/* ── Cover image area ── */}
                   <div className="book-cover" onClick={() => navigate(`/admin/books/${book.id}`)}>
-                    {imgSrc ? (
-                      <img
-                        src={imgSrc}
-                        alt={`Cover of ${book.title}`}
-                        className="cover-img"
-                        onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-                      />
-                    ) : null}
-                    <BookPlaceholder title={book.title} />
-                  </div>
+  {imgSrc && (
+    <img
+      src={imgSrc}
+      alt={`Cover of ${book.title}`}
+      className="cover-img"
+      onLoad={e  => { e.target.style.opacity = "1"; e.target.nextSibling.style.display = "none"; }}
+      onError={e => { e.target.style.display = "none"; }}
+      style={{ opacity: 0, transition: "opacity 0.2s" }}
+    />
+  )}
+  <BookPlaceholder title={book.title} />
+</div>
 
                   {/* ── Card body ── */}
                   <div className="book-body">
@@ -529,11 +530,6 @@ export default function BookManagement() {
           background: linear-gradient(160deg, #1a6338 0%, #14532D 100%);
           cursor: pointer; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-        }
-        .cover-img {
-          width: 100%; height: 100%; object-fit: cover;
-          display: block;
-          transition: transform 0.22s;
         }
         .book-card:hover .cover-img { transform: scale(1.03); }
 

@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import AdminSidebar from "../../components/AdminSidebar";
 
-const PIE_COLORS = ["#66bb6a", "#2e7d32", "#ef5350"];
+const PIE_COLORS = ["#14532D", "#B8860B", "#A13D2B"];
 
 export default function Dashboard() {
   /* ── existing state ── */
@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [aiInsight, setAiInsight]       = useState({});
   const [loadingAI, setLoadingAI]       = useState(false);
 
-  /* ── NEW: ML state ── */
+  /* ── ML state ── */
   const [mlData, setMlData]       = useState(null);
   const [mlInsight, setMlInsight] = useState(null);
   const [loadingML, setLoadingML] = useState(false);
@@ -32,7 +32,6 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  /* ── existing fetch ── */
   const fetchAll = async () => {
     try {
       const [o, t, g, b, u] = await Promise.all([
@@ -54,11 +53,9 @@ export default function Dashboard() {
       console.error(err);
     }
 
-    /* ── NEW: fetch ML separately so it doesn't block existing data ── */
     fetchML();
   };
 
-  /* ── existing AI ── */
   const generateAI = async (o, t, b, u) => {
     setLoadingAI(true);
     try {
@@ -74,7 +71,6 @@ export default function Dashboard() {
     setLoadingAI(false);
   };
 
-  /* ── NEW: ML fetch + insight ── */
   const fetchML = async () => {
     setLoadingML(true);
     try {
@@ -103,18 +99,31 @@ export default function Dashboard() {
     { name: "Overdue",  value: overview.overdueBorrows  || 0 },
   ];
 
+  const totalBorrows = (overview.activeBorrows || 0) + (overview.returnedBorrows || 0) + (overview.overdueBorrows || 0);
+
   return (
     <>
       <AdminSidebar />
 
       <div className="admin-main">
-        <h1 className="page-title">Dashboard Analytics</h1>
+        <header className="page-head">
+          <p className="eyebrow">Library Records &amp; Circulation</p>
+          <h1 className="page-title">Dashboard</h1>
+        </header>
 
-        {/* ════════════════ EXISTING: AI INSIGHT ════════════════ */}
-        <div className="card">
-          <h2 className="section-title">🤖 AI Insights</h2>
+        {/* ════════════════ KPI STRIP ════════════════ */}
+        <div className="kpi-strip">
+          <KpiCard label="Total Borrows" value={totalBorrows} />
+          <KpiCard label="Active" value={overview.activeBorrows || 0} tone="forest" />
+          <KpiCard label="Returned" value={overview.returnedBorrows || 0} tone="gold" />
+          <KpiCard label="Overdue" value={overview.overdueBorrows || 0} tone="espresso" />
+        </div>
 
-          {loadingAI ? <p className="loading-text">Generating...</p> : (
+        {/* ════════════════ AI INSIGHT ════════════════ */}
+        <section className="card">
+          <SectionHead eyebrow="Generated Summary" title="AI Insights" />
+
+          {loadingAI ? <p className="loading-text">Generating…</p> : (
             <>
               <p className="summary">{aiInsight.summary}</p>
               <div className="cards">
@@ -124,25 +133,25 @@ export default function Dashboard() {
               </div>
             </>
           )}
-        </div>
+        </section>
 
-        {/* ════════════════ NEW: ML PREDICTIVE INSIGHTS ════════════════ */}
-        <div className="card ml-card">
+        {/* ════════════════ ML PREDICTIVE INSIGHTS ════════════════ */}
+        <section className="card ml-card">
           <div className="ml-header">
-            <h2 className="section-title">🧠 ML Predictive Insights</h2>
-            <span className="ml-badge">Powered by Linear Regression &amp; Behavioral Scoring</span>
+            <SectionHead eyebrow="Predictive Model" title="ML Insights" />
+            <span className="ml-badge">Linear Regression &amp; Behavioral Scoring</span>
           </div>
 
           {loadingML ? (
             <div className="ml-loading">
               <div className="ml-spinner" />
-              <p>Running predictive analysis...</p>
+              <p>Running predictive analysis…</p>
             </div>
           ) : mlInsight ? (
             <>
               {/* ── FORECAST ── */}
               <div className="ml-block">
-                <h3 className="ml-subtitle">📈 Borrowing Forecast</h3>
+                <h3 className="ml-subtitle">Borrowing Forecast</h3>
                 <div className="forecast-row">
                   <div className="forecast-box">
                     <div className="forecast-number">
@@ -153,18 +162,17 @@ export default function Dashboard() {
                   <p className="ml-text">{mlInsight.forecastSummary}</p>
                 </div>
 
-                {/* monthly volume mini-chart */}
                 {mlData?.monthlyVolume?.length > 0 && (
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={mlData.monthlyVolume}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E4DFD3" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#5C5546" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#5C5546" }} />
+                      <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3", fontFamily: "Inter, sans-serif" }} />
                       <Legend />
-                      <Line type="monotone" dataKey="total_borrows" stroke="#2e7d32" name="Borrows" dot={false} />
-                      <Line type="monotone" dataKey="returned"      stroke="#66bb6a" name="Returned" dot={false} strokeDasharray="4 2" />
-                      <Line type="monotone" dataKey="overdue"       stroke="#ef5350" name="Overdue"  dot={false} strokeDasharray="2 2" />
+                      <Line type="monotone" dataKey="total_borrows" stroke="#14532D" name="Borrows" dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="returned"      stroke="#B8860B" name="Returned" dot={false} strokeWidth={2} strokeDasharray="4 2" />
+                      <Line type="monotone" dataKey="overdue"       stroke="#A13D2B" name="Overdue"  dot={false} strokeWidth={2} strokeDasharray="2 2" />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -172,17 +180,17 @@ export default function Dashboard() {
 
               {/* ── PEAK DAY ── */}
               <div className="ml-block">
-                <h3 className="ml-subtitle">📅 Peak Borrowing Period</h3>
+                <h3 className="ml-subtitle">Peak Borrowing Period</h3>
                 <p className="ml-text">{mlInsight.peakDay}</p>
 
                 {mlData?.dowPattern?.length > 0 && (
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={mlData.dowPattern}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="day_name" tick={{ fontSize: 11 }} />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="total" fill="#66bb6a" radius={[4, 4, 0, 0]} name="Borrows" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E4DFD3" />
+                      <XAxis dataKey="day_name" tick={{ fontSize: 11, fill: "#5C5546" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#5C5546" }} />
+                      <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
+                      <Bar dataKey="total" fill="#14532D" radius={[4, 4, 0, 0]} name="Borrows" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -191,17 +199,16 @@ export default function Dashboard() {
               {/* ── SUBJECT DEMAND ── */}
               {mlInsight.subjectInsights?.length > 0 && (
                 <div className="ml-block">
-                  <h3 className="ml-subtitle">📚 Subject Demand Patterns</h3>
+                  <h3 className="ml-subtitle">Subject Demand Patterns</h3>
 
-                  {/* subject bar chart from raw data */}
                   {mlData?.subjectDemand?.length > 0 && (
                     <ResponsiveContainer width="100%" height={180}>
                       <BarChart data={mlData.subjectDemand} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" />
-                        <YAxis dataKey="subject" type="category" width={110} tick={{ fontSize: 11 }} />
-                        <Tooltip />
-                        <Bar dataKey="total_borrows" fill="#81c784" radius={[0, 4, 4, 0]} name="Borrows" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E4DFD3" />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: "#5C5546" }} />
+                        <YAxis dataKey="subject" type="category" width={110} tick={{ fontSize: 11, fill: "#5C5546" }} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
+                        <Bar dataKey="total_borrows" fill="#3E7A4D" radius={[0, 4, 4, 0]} name="Borrows" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -220,7 +227,7 @@ export default function Dashboard() {
               {/* ── AT-RISK STUDENTS ── */}
               {mlInsight.atRiskStudents?.length > 0 && (
                 <div className="ml-block">
-                  <h3 className="ml-subtitle">⚠️ At-Risk Student Detection</h3>
+                  <h3 className="ml-subtitle">At-Risk Student Detection</h3>
                   <p className="ml-hint">Students flagged by behavioral overdue-rate scoring</p>
                   <div className="table-wrap">
                     <table>
@@ -254,17 +261,17 @@ export default function Dashboard() {
               {/* ── HOT BOOKS ── */}
               {mlInsight.hotBooks?.length > 0 && (
                 <div className="ml-block">
-                  <h3 className="ml-subtitle">🔥 Book Heat Score</h3>
+                  <h3 className="ml-subtitle">Book Heat Score</h3>
                   <p className="ml-hint">Ranked by frequency-recency heat scoring algorithm</p>
 
                   {mlData?.bookHeat?.length > 0 && (
                     <ResponsiveContainer width="100%" height={180}>
                       <BarChart data={mlData.bookHeat.slice(0, 6)}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="title" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={50} />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="heat_score" fill="#ff7043" radius={[4, 4, 0, 0]} name="Heat Score" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E4DFD3" />
+                        <XAxis dataKey="title" tick={{ fontSize: 10, fill: "#5C5546" }} interval={0} angle={-20} textAnchor="end" height={50} />
+                        <YAxis tick={{ fontSize: 11, fill: "#5C5546" }} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
+                        <Bar dataKey="heat_score" fill="#A13D2B" radius={[4, 4, 0, 0]} name="Heat Score" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -282,8 +289,8 @@ export default function Dashboard() {
 
               {/* ── RECOMMENDATIONS ── */}
               {mlInsight.recommendations?.length > 0 && (
-                <div className="ml-block" style={{ borderBottom: "none", marginBottom: 0 }}>
-                  <h3 className="ml-subtitle">💡 AI-Generated Recommendations</h3>
+                <div className="ml-block" style={{ borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>
+                  <h3 className="ml-subtitle">AI-Generated Recommendations</h3>
                   <div className="rec-grid">
                     {mlInsight.recommendations.map((r, i) => (
                       <div key={i} className={`rec-card priority-${r.priority?.toLowerCase()}`}>
@@ -303,40 +310,40 @@ export default function Dashboard() {
           ) : (
             <p className="ml-text">No ML data available yet.</p>
           )}
-        </div>
+        </section>
 
-        {/* ════════════════ EXISTING: CHART GRID ════════════════ */}
+        {/* ════════════════ CHART GRID ════════════════ */}
         <div className="grid">
-          <div className="card">
-            <h2 className="section-title">📈 Borrow Trends</h2>
+          <section className="card">
+            <SectionHead eyebrow="Monthly" title="Borrow Trends" />
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={borrowTrends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="total" stroke="#2e7d32" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E4DFD3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#5C5546" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#5C5546" }} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
+                <Line type="monotone" dataKey="total" stroke="#14532D" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </section>
 
-          <div className="card">
-            <h2 className="section-title">👥 User Growth</h2>
+          <section className="card">
+            <SectionHead eyebrow="Monthly" title="User Growth" />
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={userGrowth}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="total" stroke="#66bb6a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E4DFD3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#5C5546" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#5C5546" }} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
+                <Line type="monotone" dataKey="total" stroke="#B8860B" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </section>
         </div>
 
-        {/* ════════════════ EXISTING: STATUS PIE ════════════════ */}
-        <div className="card">
-          <h2 className="section-title">📊 Borrow Status</h2>
+        {/* ════════════════ STATUS PIE ════════════════ */}
+        <section className="card">
+          <SectionHead eyebrow="Snapshot" title="Borrow Status" />
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie data={statusData} dataKey="value" outerRadius={100} label>
@@ -344,79 +351,162 @@ export default function Dashboard() {
                   <Cell key={i} fill={PIE_COLORS[i]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E4DFD3" }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
-        </div>
+        </section>
 
-        {/* ════════════════ EXISTING: TABLES ════════════════ */}
+        {/* ════════════════ TABLES ════════════════ */}
         <div className="grid">
-          <div className="card">
-            <h2 className="section-title">📚 Top Books</h2>
+          <section className="card">
+            <SectionHead eyebrow="Ranked" title="Top Books" />
             <Table
               headers={["Title", "Borrows"]}
               data={topBooks.map(b => [b.title, b.borrows])}
             />
-          </div>
+          </section>
 
-          <div className="card">
-            <h2 className="section-title">🏆 Top Borrowers</h2>
+          <section className="card">
+            <SectionHead eyebrow="Ranked" title="Top Borrowers" />
             <Table
               headers={["Name", "LRN", "Total"]}
               data={topBorrowers.map(u => [u.full_name, u.lrn, u.total])}
             />
-          </div>
+          </section>
         </div>
       </div>
 
       {/* ════════════════ STYLES ════════════════ */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+        :root {
+          --forest: #14532D;
+          --forest-light: #3E7A4D;
+          --gold: #B8860B;
+          --gold-light: #D8B24D;
+          --espresso: #5C3D2E;
+          --rust: #A13D2B;
+          --parchment: #FAF6EE;
+          --sage: #EEF3E7;
+          --ink: #241F18;
+          --ink-soft: #5C5546;
+          --line: #E4DFD3;
+        }
+
         /* ── layout ── */
         .admin-main {
           margin-left: 260px;
-          padding: 30px;
-          background: #f9fbe7;
+          padding: 36px 40px 60px;
+          background: var(--parchment);
           min-height: 100vh;
+          font-family: 'Inter', sans-serif;
+          color: var(--ink);
+        }
+
+        .page-head { margin-bottom: 28px; }
+
+        .eyebrow {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.72rem;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--gold);
+          font-weight: 600;
+          margin: 0 0 6px;
         }
 
         .page-title {
-          color: #2e7d32;
-          margin-bottom: 20px;
-          font-size: 1.6rem;
+          font-family: 'Fraunces', serif;
+          font-weight: 600;
+          font-size: 2.1rem;
+          color: var(--forest);
+          margin: 0;
+          letter-spacing: -0.01em;
+        }
+
+        /* ── KPI strip ── */
+        .kpi-strip {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .kpi-card {
+          background: white;
+          border: 1px solid var(--line);
+          border-left: 4px solid var(--ink-soft);
+          border-radius: 4px;
+          padding: 18px 20px;
+        }
+        .kpi-card.forest   { border-left-color: var(--forest); }
+        .kpi-card.gold     { border-left-color: var(--gold); }
+        .kpi-card.espresso { border-left-color: var(--rust); }
+
+        .kpi-value {
+          font-family: 'IBM Plex Mono', monospace;
+          font-weight: 600;
+          font-size: 1.9rem;
+          color: var(--ink);
+          line-height: 1;
+        }
+
+        .kpi-label {
+          font-size: 0.78rem;
+          color: var(--ink-soft);
+          margin-top: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         /* ── base card ── */
         .card {
           background: white;
-          border: 1px solid #c5e1a5;
-          border-radius: 12px;
-          padding: 20px;
+          border: 1px solid var(--line);
+          border-radius: 6px;
+          padding: 24px 26px;
           margin-bottom: 20px;
         }
 
-        .section-title {
-          color: #2e7d32;
-          margin-bottom: 15px;
+        .section-head { margin-bottom: 16px; }
+
+        .section-eyebrow {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+          margin: 0 0 3px;
         }
 
-        .summary { margin-bottom: 15px; }
+        .section-title {
+          font-family: 'Fraunces', serif;
+          font-weight: 600;
+          font-size: 1.25rem;
+          color: var(--forest);
+          margin: 0 0 8px;
+          padding-bottom: 10px;
+          border-bottom: 2px solid var(--gold);
+          display: inline-block;
+        }
 
-        .loading-text { color: #888; font-style: italic; }
+        .summary { margin-bottom: 15px; color: var(--ink-soft); line-height: 1.6; }
+
+        .loading-text { color: var(--ink-soft); font-style: italic; }
 
         /* ── stat cards ── */
-        .cards {
-          display: flex;
-          gap: 15px;
-          flex-wrap: wrap;
-        }
+        .cards { display: flex; gap: 15px; flex-wrap: wrap; }
 
         .stat {
-          background: #f1f8e9;
-          border-radius: 10px;
-          padding: 15px;
+          background: var(--sage);
+          border-radius: 6px;
+          padding: 15px 18px;
           min-width: 140px;
         }
+        .stat p { margin: 0 0 4px; font-size: 0.8rem; color: var(--ink-soft); }
+        .stat h2 { margin: 0; font-family: 'IBM Plex Mono', monospace; color: var(--forest); font-size: 1.4rem; }
 
         /* ── grid ── */
         .grid {
@@ -427,49 +517,57 @@ export default function Dashboard() {
         }
 
         /* ── base table ── */
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #e8f5e9; padding: 10px; text-align: left; }
-        td { padding: 10px; border-bottom: 1px solid #eee; }
-        tr:hover { background: #f1f8e9; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+        th {
+          background: var(--sage);
+          padding: 10px 12px;
+          text-align: left;
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--forest);
+          font-weight: 600;
+        }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+        tr:hover td { background: var(--sage); }
 
         /* ════ ML CARD ════ */
-        .ml-card { border-color: #a5d6a7; }
+        .ml-card { border-color: var(--gold-light); border-top: 3px solid var(--gold); }
 
         .ml-header {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
+          justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
-          margin-bottom: 20px;
         }
-
-        .ml-header .section-title { margin-bottom: 0; }
 
         .ml-badge {
-          font-size: 0.72rem;
-          background: #e8f5e9;
-          color: #388e3c;
-          padding: 3px 10px;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem;
+          background: var(--sage);
+          color: var(--forest);
+          padding: 5px 12px;
           border-radius: 20px;
-          border: 1px solid #c5e1a5;
+          border: 1px solid var(--line);
           font-weight: 600;
-          letter-spacing: 0.3px;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
         }
 
-        /* ── ML loading ── */
         .ml-loading {
           display: flex;
           align-items: center;
           gap: 12px;
-          color: #888;
+          color: var(--ink-soft);
           padding: 10px 0;
         }
 
         .ml-spinner {
           width: 20px;
           height: 20px;
-          border: 3px solid #c5e1a5;
-          border-top-color: #2e7d32;
+          border: 3px solid var(--line);
+          border-top-color: var(--forest);
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
           flex-shrink: 0;
@@ -477,29 +575,25 @@ export default function Dashboard() {
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── ML blocks ── */
         .ml-block {
           margin-bottom: 28px;
           padding-bottom: 24px;
-          border-bottom: 1px solid #f1f8e9;
+          border-bottom: 1px solid var(--sage);
         }
 
         .ml-subtitle {
-          color: #388e3c;
-          margin-bottom: 10px;
-          font-size: 1rem;
+          font-family: 'Fraunces', serif;
+          color: var(--espresso);
+          margin: 0 0 10px;
+          font-size: 1.02rem;
           font-weight: 600;
         }
 
-        .ml-text {
-          color: #555;
-          margin-bottom: 12px;
-          line-height: 1.55;
-        }
+        .ml-text { color: var(--ink-soft); margin-bottom: 12px; line-height: 1.55; }
 
         .ml-hint {
           font-size: 0.82rem;
-          color: #888;
+          color: var(--ink-soft);
           margin-bottom: 12px;
           font-style: italic;
         }
@@ -514,25 +608,25 @@ export default function Dashboard() {
         }
 
         .forecast-box {
-          background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
-          border: 1px solid #c5e1a5;
-          border-radius: 14px;
-          padding: 16px 28px;
+          background: linear-gradient(135deg, var(--forest), #1f6b3d);
+          border-radius: 8px;
+          padding: 18px 30px;
           text-align: center;
           flex-shrink: 0;
         }
 
         .forecast-number {
-          font-size: 2.8rem;
-          font-weight: 700;
-          color: #2e7d32;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 2.6rem;
+          font-weight: 600;
+          color: white;
           line-height: 1;
         }
 
         .forecast-label {
-          font-size: 0.78rem;
-          color: #666;
-          margin-top: 4px;
+          font-size: 0.76rem;
+          color: rgba(255,255,255,0.85);
+          margin-top: 6px;
         }
 
         /* ── insight grid ── */
@@ -544,34 +638,25 @@ export default function Dashboard() {
         }
 
         .insight-card {
-          background: #f1f8e9;
-          border-radius: 10px;
-          padding: 12px;
-          border-left: 4px solid #66bb6a;
+          background: var(--sage);
+          border-radius: 6px;
+          padding: 12px 14px;
+          border-left: 3px solid var(--forest-light);
         }
 
-        .insight-card.hot {
-          border-left-color: #ff7043;
-          background: #fff8f6;
-        }
+        .insight-card.hot { border-left-color: var(--rust); background: #FBF1EE; }
 
         .insight-card strong {
           display: block;
           margin-bottom: 5px;
-          color: #2e7d32;
+          color: var(--forest);
           font-size: 0.9rem;
+          font-family: 'Fraunces', serif;
         }
+        .insight-card.hot strong { color: var(--rust); }
 
-        .insight-card.hot strong { color: #bf360c; }
+        .insight-card p { font-size: 0.82rem; color: var(--ink-soft); margin: 0; line-height: 1.45; }
 
-        .insight-card p {
-          font-size: 0.82rem;
-          color: #555;
-          margin: 0;
-          line-height: 1.45;
-        }
-
-        /* ── table wrap ── */
         .table-wrap { overflow-x: auto; }
 
         /* ── badges ── */
@@ -579,13 +664,14 @@ export default function Dashboard() {
           display: inline-block;
           padding: 3px 10px;
           border-radius: 20px;
-          font-size: 0.78rem;
+          font-size: 0.74rem;
           font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
         }
-
-        .badge-high   { background: #ffcdd2; color: #c62828; }
-        .badge-medium { background: #fff9c4; color: #f57f17; }
-        .badge-low    { background: #c8e6c9; color: #2e7d32; }
+        .badge-high   { background: #FBDCD5; color: var(--rust); }
+        .badge-medium { background: #F6E9C9; color: #8A6A0F; }
+        .badge-low    { background: #DCEAD f; background: #DCEADF; color: var(--forest); }
 
         /* ── recommendations ── */
         .rec-grid {
@@ -595,15 +681,14 @@ export default function Dashboard() {
         }
 
         .rec-card {
-          background: #f9fbe7;
-          border-radius: 10px;
+          background: var(--sage);
+          border-radius: 6px;
           padding: 14px 16px;
-          border-left: 5px solid #aed581;
+          border-left: 4px solid var(--forest-light);
         }
-
-        .rec-card.priority-high   { border-left-color: #ef5350; background: #fff8f8; }
-        .rec-card.priority-medium { border-left-color: #ffa726; background: #fffdf5; }
-        .rec-card.priority-low    { border-left-color: #aed581; }
+        .rec-card.priority-high   { border-left-color: var(--rust); background: #FBF1EE; }
+        .rec-card.priority-medium { border-left-color: var(--gold); background: #FBF6E7; }
+        .rec-card.priority-low    { border-left-color: var(--forest-light); }
 
         .rec-top {
           display: flex;
@@ -615,30 +700,33 @@ export default function Dashboard() {
         }
 
         .rec-category {
-          font-size: 0.72rem;
-          background: #e8f5e9;
-          padding: 2px 8px;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem;
+          background: white;
+          padding: 3px 9px;
           border-radius: 10px;
-          color: #388e3c;
-          font-weight: 700;
-        }
-
-        .rec-priority-badge {
-          font-size: 0.7rem;
-          padding: 2px 8px;
-          border-radius: 10px;
+          color: var(--forest);
           font-weight: 600;
         }
 
-        .priority-badge-high   { background: #ffcdd2; color: #c62828; }
-        .priority-badge-medium { background: #fff9c4; color: #f57f17; }
-        .priority-badge-low    { background: #c8e6c9; color: #2e7d32; }
+        .rec-priority-badge {
+          font-size: 0.68rem;
+          padding: 3px 9px;
+          border-radius: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        .priority-badge-high   { background: #FBDCD5; color: var(--rust); }
+        .priority-badge-medium { background: #F6E9C9; color: #8A6A0F; }
+        .priority-badge-low    { background: #DCEADF; color: var(--forest); }
 
-        .rec-card p {
-          margin: 0;
-          color: #444;
-          font-size: 0.88rem;
-          line-height: 1.5;
+        .rec-card p { margin: 0; color: var(--ink); font-size: 0.88rem; line-height: 1.5; }
+
+        /* ── responsive ── */
+        @media (max-width: 1000px) {
+          .admin-main { margin-left: 0; padding: 24px; }
+          .kpi-strip { grid-template-columns: 1fr 1fr; }
+          .grid { grid-template-columns: 1fr; }
         }
       `}</style>
     </>
@@ -646,6 +734,24 @@ export default function Dashboard() {
 }
 
 /* ════════════════ SMALL COMPONENTS ════════════════ */
+function SectionHead({ eyebrow, title }) {
+  return (
+    <div className="section-head">
+      {eyebrow && <p className="section-eyebrow">{eyebrow}</p>}
+      <h2 className="section-title">{title}</h2>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, tone }) {
+  return (
+    <div className={`kpi-card ${tone || ""}`}>
+      <div className="kpi-value">{value}</div>
+      <div className="kpi-label">{label}</div>
+    </div>
+  );
+}
+
 function StatCard({ title, value }) {
   return (
     <div className="stat">

@@ -37,19 +37,9 @@ export default function AttendanceManagement() {
   const fetchAttendance = async (p = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page:   p,
-        limit:  20,
-        search,
-        date
-      });
-
-      const res  = await fetch(
-        `${baseURL}/api/attendance?${params.toString()}`,
-        { headers }
-      );
+      const params = new URLSearchParams({ page: p, limit: 20, search, date });
+      const res  = await fetch(`${baseURL}/api/attendance?${params.toString()}`, { headers });
       const data = await res.json();
-
       setAttendance(data.attendance || []);
       setTotalPages(data.totalPages || 1);
       setTotal(data.total || 0);
@@ -60,25 +50,13 @@ export default function AttendanceManagement() {
     }
   };
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  useEffect(() => {
-    setPage(1);
-    fetchAttendance(1);
-  }, [search, date]);
-
-  useEffect(() => {
-    fetchAttendance(page);
-  }, [page]);
+  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => { setPage(1); fetchAttendance(1); }, [search, date]);
+  useEffect(() => { fetchAttendance(page); }, [page]);
 
   const formatTime = (dt) => {
-    if (!dt) return <span className="null-badge">—</span>;
-    return new Date(dt).toLocaleTimeString([], {
-      hour:   "2-digit",
-      minute: "2-digit"
-    });
+    if (!dt) return <span style={s.nullBadge}>—</span>;
+    return new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   const getDuration = (timeIn, timeOut) => {
@@ -90,100 +68,131 @@ export default function AttendanceManagement() {
   };
 
   const statusBadge = (row) => {
-    if (!row.time_out) {
-      return <span className="badge badge-in">Still Inside</span>;
-    }
-    return <span className="badge badge-out">Completed</span>;
+    if (!row.time_out) return <span style={{ ...s.badge, ...s.badgeIn }}>Still Inside</span>;
+    return <span style={{ ...s.badge, ...s.badgeOut }}>Completed</span>;
   };
 
   return (
     <>
       <AdminSidebar />
 
-      <div className="admin-main">
-        <h1 className="page-title">📋 Attendance Management</h1>
+      <div style={s.main}>
 
-        {/* ── STAT CARDS ── */}
-        <div className="stat-grid">
-          <StatCard emoji="🟢" label="Currently Inside"  value={stats.currentlyIn  ?? "—"} color="#2e7d32" />
-          <StatCard emoji="👥" label="Today's Total"     value={stats.todayTotal   ?? "—"} color="#1565c0" />
-          <StatCard emoji="✅" label="Timed Out Today"   value={stats.todayOut     ?? "—"} color="#6a1b9a" />
-          <StatCard emoji="📊" label="All Time Records"  value={stats.allTimeTotal ?? "—"} color="#e65100" />
+        {/* ── PAGE HEADER ── */}
+        <div style={s.pageHeader}>
+          <div>
+            <div style={s.eyebrow}>Attendance</div>
+            <h1 style={s.pageTitle}>Attendance Management</h1>
+            <p style={s.pageSub}>Track student library visits and time logs</p>
+          </div>
+          <button
+            style={s.refreshBtn}
+            onClick={() => { fetchStats(); fetchAttendance(page); }}
+            onMouseEnter={e => e.currentTarget.style.background = "#e6ac00"}
+            onMouseLeave={e => e.currentTarget.style.background = "#F5B800"}
+          >
+            ↺ Refresh
+          </button>
         </div>
 
-        {/* ── FILTERS ── */}
-        <div className="toolbar">
-          <div className="search-box">
-            <span>🔍</span>
+        {/* ── STAT CARDS ── */}
+        <div style={s.statGrid}>
+          <StatCard label="Currently Inside"  value={stats.currentlyIn  ?? "—"} accent="#2E7D32" bg="#E8F5E9" />
+          <StatCard label="Today's Visitors"  value={stats.todayTotal   ?? "—"} accent="#5C3A1E" bg="#F5EDE5" />
+          <StatCard label="Timed Out Today"   value={stats.todayOut     ?? "—"} accent="#1565C0" bg="#E3F2FD" />
+          <StatCard label="All-Time Records"  value={stats.allTimeTotal ?? "—"} accent="#F5B800" bg="#FFF8E1" accentText="#5C3A1E" />
+        </div>
+
+        {/* ── TOOLBAR ── */}
+        <div style={s.toolbar}>
+          <div style={s.searchBox}>
+            <span style={s.searchIcon}>🔍</span>
             <input
-              placeholder="Search by name or LRN..."
+              style={s.searchInput}
+              placeholder="Search by name or LRN…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
             />
             {search && (
-              <button onClick={() => setSearch("")}>✕</button>
+              <button style={s.clearBtn} onClick={() => setSearch("")}>✕</button>
             )}
           </div>
 
-          <div className="date-filter">
-            <label>📅 Date</label>
+          <div style={s.dateFilter}>
+            <span style={s.dateLabel}>📅 Date</span>
             <input
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={e => setDate(e.target.value)}
+              style={s.dateInput}
             />
             <button
-              className="today-btn"
+              style={s.todayBtn}
               onClick={() => setDate(todayDate())}
+              onMouseEnter={e => e.currentTarget.style.background = "#C8E6C9"}
+              onMouseLeave={e => e.currentTarget.style.background = "#E8F5E9"}
             >
               Today
             </button>
             <button
-              className="all-btn"
+              style={s.allBtn}
               onClick={() => setDate("")}
+              onMouseEnter={e => e.currentTarget.style.background = "#F5EDE5"}
+              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
             >
               All Dates
             </button>
           </div>
         </div>
 
-        {/* ── TABLE ── */}
-        <div className="card">
-          <div className="table-header">
-            <span>{total} record{total !== 1 ? "s" : ""} found</span>
-            <button className="refresh-btn" onClick={() => { fetchStats(); fetchAttendance(page); }}>
-              🔄 Refresh
-            </button>
+        {/* ── TABLE CARD ── */}
+        <div style={s.card}>
+
+          {/* card header */}
+          <div style={s.cardHeader}>
+            <div>
+              <div style={s.cardTitle}>Attendance Log</div>
+              <div style={s.cardSub}>{total} record{total !== 1 ? "s" : ""} found</div>
+            </div>
+            <span style={s.chip}>{date || "All dates"}</span>
           </div>
 
+          {/* content */}
           {loading ? (
-            <p className="loading-text">Loading...</p>
+            <div style={s.stateWrap}>
+              <div style={s.spinner} />
+              <p style={s.stateText}>Loading records…</p>
+            </div>
           ) : attendance.length === 0 ? (
-            <p className="empty-text">No attendance records found</p>
+            <div style={s.stateWrap}>
+              <div style={{ fontSize: "2rem", marginBottom: 8 }}>📭</div>
+              <p style={s.stateText}>No attendance records found</p>
+            </div>
           ) : (
-            <div className="table-wrap">
-              <table>
+            <div style={s.tableWrap}>
+              <table style={s.table}>
                 <thead>
                   <tr>
-                    <th>Student</th>
-                    <th>LRN</th>
-                    <th>Date</th>
-                    <th>Time In</th>
-                    <th>Time Out</th>
-                    <th>Duration</th>
-                    <th>Status</th>
+                    {["Student", "LRN", "Date", "Time In", "Time Out", "Duration", "Status"].map(h => (
+                      <th key={h} style={s.th}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {attendance.map((row) => (
-                    <tr key={row.id}>
-                      <td><strong>{row.full_name}</strong></td>
-                      <td className="mono">{row.lrn || "—"}</td>
-                      <td>{row.date}</td>
-                      <td className="time-in">{formatTime(row.time_in)}</td>
-                      <td className="time-out">{formatTime(row.time_out)}</td>
-                      <td>{getDuration(row.time_in, row.time_out)}</td>
-                      <td>{statusBadge(row)}</td>
+                  {attendance.map((row, i) => (
+                    <tr
+                      key={row.id}
+                      style={s.tr}
+                      onMouseEnter={e => e.currentTarget.style.background = "#F9FBE7"}
+                      onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#FDFAF4"}
+                    >
+                      <td style={{ ...s.td, fontWeight: 600, color: "#1E1E1E" }}>{row.full_name}</td>
+                      <td style={{ ...s.td, ...s.mono }}>{row.lrn || "—"}</td>
+                      <td style={s.td}>{row.date}</td>
+                      <td style={{ ...s.td, color: "#2E7D32", fontWeight: 600 }}>{formatTime(row.time_in)}</td>
+                      <td style={{ ...s.td, color: "#C62828", fontWeight: 600 }}>{formatTime(row.time_out)}</td>
+                      <td style={{ ...s.td, color: "#5C3A1E", fontWeight: 500 }}>{getDuration(row.time_in, row.time_out)}</td>
+                      <td style={s.td}>{statusBadge(row)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -191,262 +200,356 @@ export default function AttendanceManagement() {
             </div>
           )}
 
-          {/* PAGINATION */}
-          <div className="pagination">
+          {/* ── PAGINATION ── */}
+          <div style={s.pagination}>
             <button
+              style={{ ...s.pageBtn, opacity: page === 1 ? 0.4 : 1 }}
               disabled={page === 1}
               onClick={() => setPage(p => p - 1)}
-            >◀</button>
-            <span>{page} / {totalPages}</span>
+            >
+              ← Prev
+            </button>
+            <span style={s.pageInfo}>
+              Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+            </span>
             <button
+              style={{ ...s.pageBtn, opacity: page === totalPages ? 0.4 : 1 }}
               disabled={page === totalPages}
               onClick={() => setPage(p => p + 1)}
-            >▶</button>
+            >
+              Next →
+            </button>
           </div>
         </div>
       </div>
 
-      <style jsx>{`
-        .admin-main {
-          margin-left: 260px;
-          padding: 30px;
-          background: #f9fbe7;
-          min-height: 100vh;
-        }
-
-        .page-title {
-          color: #2e7d32;
-          margin-bottom: 24px;
-          font-size: 1.5rem;
-        }
-
-        /* ── stat cards ── */
-        .stat-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-
-        @media (max-width: 900px) {
-          .stat-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        .stat-card {
-          background: white;
-          border-radius: 12px;
-          padding: 18px 20px;
-          border: 1px solid #c5e1a5;
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-
-        .stat-emoji { font-size: 1.8rem; }
-
-        .stat-info label {
-          font-size: 0.75rem;
-          color: #888;
-          display: block;
-          margin-bottom: 2px;
-        }
-
-        .stat-info strong {
-          font-size: 1.6rem;
-          font-weight: 700;
-        }
-
-        /* ── toolbar ── */
-        .toolbar {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-          margin-bottom: 16px;
-          align-items: center;
-        }
-
-        .search-box {
-          display: flex;
-          align-items: center;
-          background: white;
-          border-radius: 8px;
-          padding: 8px 12px;
-          flex: 1;
-          min-width: 200px;
-          border: 1px solid #ddd;
-          gap: 6px;
-        }
-
-        .search-box input {
-          border: none;
-          outline: none;
-          flex: 1;
-          font-size: 0.9rem;
-        }
-
-        .search-box button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: #888;
-          font-size: 0.9rem;
-        }
-
-        .date-filter {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .date-filter label {
-          font-size: 0.85rem;
-          color: #555;
-          white-space: nowrap;
-        }
-
-        .date-filter input[type="date"] {
-          padding: 7px 10px;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          font-size: 0.85rem;
-          background: white;
-        }
-
-        .today-btn, .all-btn {
-          padding: 7px 12px;
-          border-radius: 8px;
-          border: 1px solid #c5e1a5;
-          background: #e8f5e9;
-          color: #2e7d32;
-          font-size: 0.82rem;
-          cursor: pointer;
-          font-weight: 600;
-          white-space: nowrap;
-        }
-
-        .today-btn:hover, .all-btn:hover { background: #c8e6c9; }
-
-        /* ── card ── */
-        .card {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          border: 1px solid #c5e1a5;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-
-        .table-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 14px;
-          font-size: 0.85rem;
-          color: #666;
-        }
-
-        .refresh-btn {
-          background: #e8f5e9;
-          border: 1px solid #c5e1a5;
-          color: #2e7d32;
-          padding: 6px 12px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 0.82rem;
-          font-weight: 600;
-        }
-
-        .refresh-btn:hover { background: #c8e6c9; }
-
-        .loading-text, .empty-text {
-          text-align: center;
-          color: #888;
-          padding: 30px 0;
-        }
-
-        /* ── table ── */
-        .table-wrap { overflow-x: auto; }
-
-        table { width: 100%; border-collapse: collapse; }
-
-        th {
-          background: #e8f5e9;
-          padding: 10px 12px;
-          text-align: left;
-          font-size: 0.82rem;
-          color: #2e7d32;
-          white-space: nowrap;
-        }
-
-        td {
-          padding: 10px 12px;
-          border-bottom: 1px solid #f0f0f0;
-          font-size: 0.88rem;
-        }
-
-        tr:hover td { background: #f9fbe7; }
-
-        .mono { font-family: monospace; font-size: 0.82rem; color: #666; }
-
-        .time-in  { color: #2e7d32; font-weight: 600; }
-        .time-out { color: #c62828; font-weight: 600; }
-
-        .null-badge {
-          color: #bbb;
-          font-style: italic;
-        }
-
-        /* ── badges ── */
-        .badge {
-          padding: 3px 10px;
-          border-radius: 20px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          white-space: nowrap;
-        }
-
-        .badge-in  { background: #c8e6c9; color: #1b5e20; }
-        .badge-out { background: #e8eaf6; color: #283593; }
-
-        /* ── pagination ── */
-        .pagination {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 12px;
-          margin-top: 16px;
-        }
-
-        .pagination button {
-          background: #e8f5e9;
-          border: 1px solid #c5e1a5;
-          color: #2e7d32;
-          padding: 6px 14px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 600;
-        }
-
-        .pagination button:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-
-        .pagination span { color: #555; font-size: 0.88rem; }
+      {/* spinner keyframe */}
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </>
   );
 }
 
-function StatCard({ emoji, label, value, color }) {
+/* ── STAT CARD COMPONENT ── */
+function StatCard({ label, value, accent, bg, accentText }) {
   return (
-    <div className="stat-card">
-      <span className="stat-emoji">{emoji}</span>
-      <div className="stat-info">
-        <label>{label}</label>
-        <strong style={{ color }}>{value}</strong>
+    <div style={{
+      background: "#fff",
+      borderRadius: 12,
+      padding: "20px",
+      border: "1px solid rgba(0,0,0,0.07)",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+      borderTop: `4px solid ${accent}`,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}>
+      <div style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 36, height: 36,
+        background: bg,
+        borderRadius: 8,
+      }}>
+        <div style={{ width: 14, height: 14, background: accent, borderRadius: 3 }} />
+      </div>
+      <div style={{
+        fontSize: "1.9rem",
+        fontWeight: 800,
+        color: accentText || accent,
+        lineHeight: 1,
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontSize: "0.75rem",
+        fontWeight: 600,
+        color: "#888",
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
+      }}>
+        {label}
       </div>
     </div>
   );
 }
+
+/* ════════════════ STYLE TOKENS ════════════════ */
+const s = {
+  /* layout */
+  main: {
+    marginLeft: 260,
+    padding: "28px 32px",
+    background: "#FDFAF4",
+    minHeight: "100vh",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+
+  /* page header */
+  pageHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 28,
+  },
+  eyebrow: {
+    display: "inline-block",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    background: "#5C3A1E",
+    color: "#F5B800",
+    padding: "2px 10px",
+    borderRadius: 4,
+    letterSpacing: "1px",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  pageTitle: {
+    fontSize: "1.5rem",
+    fontWeight: 800,
+    color: "#5C3A1E",
+    margin: 0,
+    lineHeight: 1.2,
+  },
+  pageSub: {
+    fontSize: "0.82rem",
+    color: "#888",
+    margin: "4px 0 0",
+  },
+
+  /* refresh button */
+  refreshBtn: {
+    background: "#F5B800",
+    color: "#5C3A1E",
+    border: "none",
+    borderRadius: 8,
+    padding: "9px 18px",
+    fontWeight: 700,
+    fontSize: "0.85rem",
+    cursor: "pointer",
+    transition: "background 0.15s",
+    flexShrink: 0,
+  },
+
+  /* stat grid */
+  statGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 14,
+    marginBottom: 24,
+  },
+
+  /* toolbar */
+  toolbar: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  searchBox: {
+    display: "flex",
+    alignItems: "center",
+    background: "#fff",
+    border: "1px solid rgba(0,0,0,0.12)",
+    borderRadius: 8,
+    padding: "8px 12px",
+    flex: 1,
+    minWidth: 200,
+    gap: 8,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+  },
+  searchIcon: { fontSize: "0.9rem", flexShrink: 0 },
+  searchInput: {
+    border: "none",
+    outline: "none",
+    flex: 1,
+    fontSize: "0.88rem",
+    background: "transparent",
+    color: "#2C2C2A",
+  },
+  clearBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#aaa",
+    fontSize: "0.85rem",
+    padding: 0,
+  },
+  dateFilter: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  dateLabel: { fontSize: "0.82rem", color: "#555", whiteSpace: "nowrap" },
+  dateInput: {
+    padding: "7px 10px",
+    border: "1px solid rgba(0,0,0,0.12)",
+    borderRadius: 8,
+    fontSize: "0.85rem",
+    background: "#fff",
+    color: "#2C2C2A",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+  },
+  todayBtn: {
+    padding: "7px 14px",
+    borderRadius: 8,
+    border: "1px solid #C5E1A5",
+    background: "#E8F5E9",
+    color: "#2E7D32",
+    fontSize: "0.82rem",
+    cursor: "pointer",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    transition: "background 0.15s",
+  },
+  allBtn: {
+    padding: "7px 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(0,0,0,0.12)",
+    background: "#fff",
+    color: "#5C3A1E",
+    fontSize: "0.82rem",
+    cursor: "pointer",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    transition: "background 0.15s",
+  },
+
+  /* card */
+  card: {
+    background: "#fff",
+    borderRadius: 12,
+    padding: "20px 24px",
+    border: "1px solid rgba(0,0,0,0.07)",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+    borderLeft: "4px solid #2E7D32",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: "#1E1E1E",
+    marginBottom: 2,
+  },
+  cardSub: {
+    fontSize: "0.78rem",
+    color: "#888",
+  },
+  chip: {
+    fontSize: "0.75rem",
+    padding: "4px 12px",
+    borderRadius: 20,
+    background: "#F5EDE5",
+    color: "#5C3A1E",
+    fontWeight: 600,
+    border: "1px solid rgba(92,58,30,0.15)",
+    whiteSpace: "nowrap",
+  },
+
+  /* state */
+  stateWrap: {
+    textAlign: "center",
+    padding: "40px 0",
+    color: "#aaa",
+  },
+  stateText: {
+    fontSize: "0.88rem",
+    color: "#aaa",
+  },
+  spinner: {
+    width: 24,
+    height: 24,
+    border: "3px solid #C5E1A5",
+    borderTopColor: "#2E7D32",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    margin: "0 auto 12px",
+  },
+
+  /* table */
+  tableWrap: { overflowX: "auto" },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: {
+    background: "#FDFAF4",
+    padding: "10px 14px",
+    textAlign: "left",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: "0.6px",
+    borderBottom: "2px solid rgba(0,0,0,0.07)",
+    whiteSpace: "nowrap",
+  },
+  td: {
+    padding: "11px 14px",
+    borderBottom: "1px solid rgba(0,0,0,0.05)",
+    fontSize: "0.87rem",
+    color: "#2C2C2A",
+    transition: "background 0.1s",
+  },
+  tr: { transition: "background 0.1s" },
+  mono: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: "0.8rem",
+    color: "#888",
+  },
+
+  /* badges */
+  badge: {
+    padding: "3px 10px",
+    borderRadius: 20,
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+  badgeIn: {
+    background: "#E8F5E9",
+    color: "#2E7D32",
+    border: "1px solid #C5E1A5",
+  },
+  badgeOut: {
+    background: "#F5EDE5",
+    color: "#5C3A1E",
+    border: "1px solid rgba(92,58,30,0.2)",
+  },
+  nullBadge: {
+    color: "#ccc",
+    fontStyle: "italic",
+  },
+
+  /* pagination */
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 14,
+    marginTop: 20,
+    paddingTop: 16,
+    borderTop: "1px solid rgba(0,0,0,0.06)",
+  },
+  pageBtn: {
+    background: "#F5EDE5",
+    border: "1px solid rgba(92,58,30,0.2)",
+    color: "#5C3A1E",
+    padding: "7px 16px",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: "0.82rem",
+    fontWeight: 700,
+    transition: "opacity 0.15s",
+  },
+  pageInfo: {
+    fontSize: "0.85rem",
+    color: "#666",
+  },
+};

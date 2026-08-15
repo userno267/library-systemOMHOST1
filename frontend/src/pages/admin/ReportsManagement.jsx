@@ -1,5 +1,66 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import AdminSidebar from "../../components/AdminSidebar";
+
+// ── PDF Preview Modal ──────────────────────────────────────────────────────
+function PDFModal({ url, onClose, onPrint, isReady, onLoad, reportLabel }) {
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Prevent body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  return (
+    <div className="rm-modal-backdrop" onClick={onClose}>
+      <div className="rm-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Modal header */}
+        <div className="rm-modal-header">
+          <div>
+            <p className="rm-eyebrow" style={{ margin: 0 }}>PDF Preview</p>
+            <h2 className="rm-modal-title">{reportLabel} Report</h2>
+          </div>
+          <div className="rm-modal-actions">
+            <button
+              className="rm-btn-primary"
+              onClick={onPrint}
+              disabled={!isReady}
+            >
+              {isReady ? <><IconPrinter /> Print Report</> : <><IconLoader /> Loading…</>}
+            </button>
+            <button className="rm-modal-close" onClick={onClose} aria-label="Close preview">
+              <IconX />
+            </button>
+          </div>
+        </div>
+        <div className="rm-gold-rule" style={{ margin: "0" }} />
+        {/* iframe */}
+        <div className="rm-modal-body">
+          {!isReady && (
+            <div className="rm-modal-loading">
+              <IconLoader />
+              <span>Rendering PDF…</span>
+            </div>
+          )}
+          <iframe
+            src={url}
+            onLoad={onLoad}
+            tabIndex={-1}
+            onMouseDown={(e) => e.preventDefault()}
+            className="rm-modal-frame"
+            style={{ opacity: isReady ? 1 : 0 }}
+            title="Report PDF Preview"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function getDisplayableStats(meta) {
   if (!meta) return null;
@@ -68,6 +129,13 @@ const IconPrinter = () => (
   </svg>
 );
 
+const IconX = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
 const IconLoader = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
     <line x1="12" y1="2" x2="12" y2="6"/>
@@ -92,8 +160,21 @@ export default function ReportsManagement() {
   const [loading, setLoading] = useState(false);
   const [previewPDF, setPreviewPDF] = useState(null);
   const [isPDFReady, setIsPDFReady] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   const iframeRef = useRef(null);
   const token = localStorage.getItem("token");
+
+  const closeModal = () => {
+    setShowModal(false);
+  };
+
+  // Close modal on Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") closeModal(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const calculateDateRange = (type) => {
     const now = new Date();
@@ -176,6 +257,10 @@ export default function ReportsManagement() {
   useEffect(() => { if (rangeType !== "custom") calculateDateRange(rangeType); /* eslint-disable-next-line */ }, [rangeType]);
 
   const generatePreview = () => {
+    setPreviewPDF(null);
+    setIsPDFReady(false);
+    setPdfGenerating(true);
+    setShowModal(true); // open modal immediately — shows spinner while PDF loads
     const params = new URLSearchParams({ startDate, endDate, orientation });
     fetch(`${import.meta.env.VITE_API_URL}/api/reports/export/${reportType}?${params}`, {
       headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "anyvalue" },
@@ -185,8 +270,12 @@ export default function ReportsManagement() {
         const url = URL.createObjectURL(blob);
         setPreviewPDF(url);
         setIsPDFReady(false);
+        setPdfGenerating(false);
       })
-      .catch((err) => console.error("PDF generation failed:", err));
+      .catch((err) => {
+        console.error("PDF generation failed:", err);
+        setPdfGenerating(false);
+      });
   };
 
   const stats = getDisplayableStats(reportMeta);
@@ -356,28 +445,52 @@ export default function ReportsManagement() {
           </div>
         )}
 
-        {/* ── PDF PREVIEW ── */}
-        {previewPDF && (
-          <div className="rm-pdf-panel">
-            <div className="rm-pdf-header">
-              <div className="rm-section-label" style={{ margin: 0 }}>PDF Preview</div>
-              <button
-                className="rm-btn-primary"
-                onClick={printPDF}
-                disabled={!isPDFReady}
-              >
-                {isPDFReady ? <><IconPrinter /> Print Report</> : <><IconLoader /> Loading…</>}
-              </button>
+        {/* ── PDF MODAL ── */}
+        {showModal && (
+          <div className="rm-modal-backdrop" onClick={closeModal}>
+            <div className="rm-modal" onClick={(e) => e.stopPropagation()}>
+              {/* Modal header */}
+              <div className="rm-modal-header">
+                <div>
+                  <p className="rm-eyebrow" style={{ margin: 0 }}>Export</p>
+                  <span className="rm-modal-title">{activeReportLabel} Report</span>
+                </div>
+                <div className="rm-modal-actions">
+                  <button
+                    className="rm-btn-primary"
+                    onClick={printPDF}
+                    disabled={!isPDFReady}
+                  >
+                    {isPDFReady ? <><IconPrinter /> Print</> : <><IconLoader /> Loading…</>}
+                  </button>
+                  <button className="rm-modal-close" onClick={closeModal} aria-label="Close preview">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal body */}
+              <div className="rm-modal-body">
+                {pdfGenerating ? (
+                  <div className="rm-pdf-loading">
+                    <IconLoader />
+                    <span>Generating PDF…</span>
+                  </div>
+                ) : (
+                  <iframe
+                    ref={iframeRef}
+                    src={previewPDF}
+                    onLoad={() => setIsPDFReady(true)}
+                    tabIndex={-1}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="rm-pdf-frame"
+                    title="Report PDF Preview"
+                  />
+                )}
+              </div>
             </div>
-            <iframe
-              ref={iframeRef}
-              src={previewPDF}
-              onLoad={() => setIsPDFReady(true)}
-              tabIndex={-1}
-              onMouseDown={(e) => e.preventDefault()}
-              className="rm-pdf-frame"
-              title="Report PDF Preview"
-            />
           </div>
         )}
       </div>
@@ -643,25 +756,103 @@ export default function ReportsManagement() {
           margin-bottom: 28px;
         }
 
-        /* ── PDF PANEL ── */
-        .rm-pdf-panel {
-          background: white;
-          border: 1px solid #e5ddd0;
-          border-radius: 10px;
-          overflow: hidden;
+        /* ── PDF MODAL ── */
+        .rm-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(36, 31, 24, 0.55);
+          backdrop-filter: blur(3px);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          animation: rm-fade-in 0.18s ease;
         }
-        .rm-pdf-header {
+        @keyframes rm-fade-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .rm-modal {
+          background: var(--parchment);
+          border: 1px solid #e5ddd0;
+          border-radius: 12px;
+          width: 100%;
+          max-width: 960px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 24px 64px rgba(36, 31, 24, 0.22);
+          animation: rm-slide-up 0.2s ease;
+        }
+        @keyframes rm-slide-up {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .rm-modal-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 14px 20px;
-          border-bottom: 2px solid var(--sage);
+          padding: 18px 24px 14px;
+          flex-shrink: 0;
+        }
+        .rm-modal-title {
+          font-family: 'Fraunces', serif;
+          font-size: 1.15rem;
+          font-weight: 600;
+          color: var(--forest);
+          display: block;
+          margin-top: 2px;
+        }
+        .rm-modal-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .rm-modal-close {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          border-radius: 7px;
+          border: 1.5px solid #d5ccbf;
+          background: white;
+          color: var(--ink);
+          cursor: pointer;
+          transition: background 0.15s, border-color 0.15s;
+          flex-shrink: 0;
+        }
+        .rm-modal-close:hover {
+          background: #f0ebe2;
+          border-color: var(--espresso);
+        }
+        .rm-modal-body {
+          flex: 1;
+          overflow: hidden;
+          position: relative;
+          background: #e8e3db;
+        }
+        .rm-pdf-loading {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          color: #6b6255;
+          font-size: 0.9rem;
+          font-family: 'Inter', sans-serif;
         }
         .rm-pdf-frame {
           width: 100%;
-          height: 540px;
+          height: 100%;
+          min-height: 560px;
           border: none;
           display: block;
+          transition: opacity 0.2s;
         }
 
         /* ── BUTTONS ── */

@@ -1,457 +1,508 @@
-// /src/pages/admin/AdminChat.jsx
-import { useEffect, useState, useRef, useCallback } from "react";
+// src/pages/admin/AttendanceManagement.jsx
+import { useEffect, useState } from "react";
 import AdminSidebar from "../../components/AdminSidebar";
-import socket from "../../socket";
 
-export default function AdminChat() {
-  const [conversations, setConversations] = useState([]);
-  const [filteredConversations, setFilteredConversations] = useState([]);
-  const [search, setSearch] = useState("");
-  const [activeConversation, setActiveConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [loadingMessages, setLoadingMessages] = useState(false);
+// ── SVG Icons ─────────────────────────────────────────────────────────────────
+const Icons = {
+  Users:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  Clock:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  LogOut:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  Archive:  () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>,
+  Search:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  X:        () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Calendar: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  Refresh:  () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.28-3.41"/></svg>,
+  Prev:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+  Next:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
+  Dot:      ({ color }) => <svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill={color}/></svg>,
+};
 
-  const messagesContainerRef = useRef(null);
-  const isUserNearBottom = useRef(true);
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-  const token = localStorage.getItem("token");
-  const baseUrl = import.meta.env.VITE_API_URL.replace(/\/$/, "");
+export default function AttendanceManagement() {
+  const baseURL = import.meta.env.VITE_API_URL;
+  const token   = localStorage.getItem("token");
+  const headers = { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "true" };
 
-  // ===========================
-  // DEBUG HELPER
-  // ===========================
-  const debugScroll = (label) => {
-    const el = messagesContainerRef.current;
-    if (!el) {
-      console.log(`[${label}] ❌ no element`);
-      return;
-    }
+  const [attendance, setAttendance] = useState([]);
+  const [stats, setStats]           = useState({});
+  const [search, setSearch]         = useState("");
+  const [date, setDate]             = useState(todayDate());
+  const [page, setPage]             = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal]           = useState(0);
+  const [loading, setLoading]       = useState(false);
 
-    console.log(`[${label}]`, {
-      scrollTop: el.scrollTop,
-      scrollHeight: el.scrollHeight,
-      clientHeight: el.clientHeight,
-      distanceFromBottom:
-        el.scrollHeight - el.scrollTop - el.clientHeight,
-    });
-  };
-
-  // ===========================
-  // Fetch Conversations
-  // ===========================
-  const fetchConversations = useCallback(async () => {
+  const fetchStats = async () => {
     try {
-      const res = await fetch(`${baseUrl}/api/support/admin/conversations`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "ngrok-skip-browser-warning": "anyvalue",
-        },
-      });
+      const res  = await fetch(`${baseURL}/api/attendance/stats`, { headers });
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
-      setConversations(list);
-      setFilteredConversations(
-        list.filter((conv) =>
-          `${conv.user_name} ${conv.lrn || ""}`
-            .toLowerCase()
-            .includes(search.toLowerCase())
-        )
-      );
-    } catch (err) {
-      console.error("❌ Fetch conversations error:", err);
-    }
-  }, [baseUrl, token, search]);
-
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
-
-  // ===========================
-  // Fetch Messages
-  // ===========================
-  const fetchMessages = useCallback(
-    async (conversationId) => {
-      if (!conversationId) return;
-
-      console.log("📥 Fetching messages:", conversationId);
-      setLoadingMessages(true);
-
-      try {
-        const res = await fetch(`${baseUrl}/api/support/${conversationId}/messages`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "ngrok-skip-browser-warning": "anyvalue",
-          },
-        });
-
-        const data = await res.json();
-        console.log("✅ Messages loaded:", data?.length);
-
-        setMessages(Array.isArray(data) ? data : []);
-
-        await fetch(`${baseUrl}/api/support/${conversationId}/read`, {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        fetchConversations();
-      } catch (err) {
-        console.error("❌ Fetch messages error:", err);
-      } finally {
-        setLoadingMessages(false);
-        console.log("🏁 Finished loading messages");
-      }
-    },
-    [baseUrl, token, fetchConversations]
-  );
-
-  // ===========================
-  // Socket
-  // ===========================
-  useEffect(() => {
-    if (!socket.connected) socket.connect();
-
-    const handleNewMessage = (data) => {
-      const { conversationId } = data;
-
-      console.log("📨 New message socket:", data);
-
-      setMessages((prev) => {
-        if (activeConversation?.id === conversationId) {
-          return [...prev, data];
-        }
-        return prev;
-      });
-
-      fetchConversations();
-    };
-
-    socket.on("newMessage", handleNewMessage);
-    return () => socket.off("newMessage", handleNewMessage);
-  }, [activeConversation, fetchConversations]);
-
-  // ===========================
-  // Open conversation
-  // ===========================
-  const openConversation = (conv) => {
-    const conversationId = conv.conversation_id || null;
-
-    console.log("🟢 Open conversation:", conversationId);
-
-    setActiveConversation({ ...conv, id: conversationId });
-    setMessages([]);
-
-    if (conversationId) {
-      fetchMessages(conversationId);
-      socket.emit("joinConversation", `${conversationId}`);
-    }
+      setStats(data);
+    } catch (err) { console.error("Stats error:", err); }
   };
 
-  // ===========================
-  // Send message
-  // ===========================
-  const sendMessage = async () => {
-    if (!input.trim() || !activeConversation) return;
-
+  const fetchAttendance = async (p = 1) => {
+    setLoading(true);
     try {
-      const body = { message: input };
-      if (!activeConversation.id && activeConversation.user_id) {
-        body.studentId = activeConversation.user_id;
-      } else {
-        body.conversationId = activeConversation.id;
-      }
-
-      const res = await fetch(`${baseUrl}/api/support/send`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "ngrok-skip-browser-warning": "anyvalue",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      setInput("");
-
-      if (!activeConversation.id && data?.conversationId) {
-        const newId = data.conversationId;
-        setActiveConversation({ ...activeConversation, id: newId });
-        socket.emit("joinConversation", `${newId}`);
-        fetchMessages(newId);
-      }
-    } catch (err) {
-      console.error("❌ Send message error:", err);
-    }
+      const params = new URLSearchParams({ page: p, limit: 20, search, date });
+      const res    = await fetch(`${baseURL}/api/attendance?${params}`, { headers });
+      const data   = await res.json();
+      setAttendance(data.attendance || []);
+      setTotalPages(data.totalPages || 1);
+      setTotal(data.total || 0);
+    } catch (err) { console.error("Attendance fetch error:", err); }
+    finally { setLoading(false); }
   };
 
-  // ===========================
-  // Detect user scroll
-  // ===========================
-  const handleScroll = () => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
+  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => { setPage(1); fetchAttendance(1); }, [search, date]);
+  useEffect(() => { fetchAttendance(page); }, [page]);
 
-    const distance =
-      el.scrollHeight - el.scrollTop - el.clientHeight;
-
-    isUserNearBottom.current = distance < 100;
-
-    console.log("🖱️ Scroll:", {
-      distance,
-      nearBottom: isUserNearBottom.current,
-    });
+  /* ── Formatters ── */
+  const formatTime = (dt) => {
+    if (!dt) return <span className="att-null">—</span>;
+    return new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  // ===========================
-  // Scroll AFTER load
-  // ===========================
-  useEffect(() => {
-    if (loadingMessages) return;
+  const getDuration = (timeIn, timeOut) => {
+    if (!timeIn || !timeOut) return "—";
+    const diff = new Date(timeOut) - new Date(timeIn);
+    const hrs  = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    return `${hrs}h ${mins}m`;
+  };
 
-    const el = messagesContainerRef.current;
-    if (!el) return;
-
-    console.log("🚀 Scroll after load triggered");
-    debugScroll("BEFORE LOAD");
-
-    setTimeout(() => {
-      el.scrollTop = el.scrollHeight;
-
-      console.log("✅ Scrolled to bottom after load");
-      debugScroll("AFTER LOAD");
-    }, 200); // increased delay
-  }, [loadingMessages]);
-
-  // ===========================
-  // Scroll on new messages
-  // ===========================
-  useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-
-    console.log("💬 Messages changed:", messages.length);
-
-    if (!isUserNearBottom.current) {
-      console.log("⛔ Skip scroll (user not at bottom)");
-      return;
-    }
-
-    console.log("⬇️ Smooth scroll");
-    debugScroll("BEFORE SMOOTH");
-
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: "smooth",
-    });
-
-    setTimeout(() => {
-      debugScroll("AFTER SMOOTH");
-    }, 200);
-  }, [messages]);
+  const StatusBadge = ({ row }) => row.time_out
+    ? <span className="att-badge badge-out"><Icons.Dot color="#14532D" /> Completed</span>
+    : <span className="att-badge badge-in"><Icons.Dot color="#B8860B" /> Inside</span>;
 
   return (
     <>
       <AdminSidebar />
-      <div className="chat-container">
-        <div className="conversation-list">
-          <h2>Support Chats</h2>
-          <input
-            type="text"
-            placeholder="Search by name or LRN..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="search-input"
-          />
 
-          {filteredConversations.map((conv) => (
-            <div
-              key={conv.user_id}
-              className={`conversation-item ${
-                activeConversation?.id === conv.conversation_id ? "active" : ""
-              }`}
-              onClick={() => openConversation(conv)}
-            >
-              <div className="top-row">
-                <strong>{conv.user_name}</strong>
-                <span>
-                  {conv.last_message_at &&
-                    new Date(conv.last_message_at).toLocaleTimeString()}
-                </span>
-              </div>
-              <p className="preview">{conv.last_message || "No messages"}</p>
-              {conv.unread_count > 0 && (
-                <span className="badge">{conv.unread_count}</span>
-              )}
-            </div>
-          ))}
+      <div className="att-main">
+
+        {/* ── Page header ── */}
+        <header className="att-header">
+          <div>
+            <p className="att-eyebrow">Library Operations</p>
+            <h1 className="att-title">Attendance Management</h1>
+          </div>
+          <button
+            className="att-refresh-btn"
+            onClick={() => { fetchStats(); fetchAttendance(page); }}
+          >
+            <Icons.Refresh /> Refresh
+          </button>
+        </header>
+
+        {/* ── KPI strip ── */}
+        <div className="att-kpi-strip">
+          <KpiCard icon={<Icons.Users />}   label="Currently Inside"  value={stats.currentlyIn  ?? "—"} tone="gold" />
+          <KpiCard icon={<Icons.Clock />}   label="Today's Visitors"  value={stats.todayTotal   ?? "—"} tone="forest" />
+          <KpiCard icon={<Icons.LogOut />}  label="Timed Out Today"   value={stats.todayOut     ?? "—"} tone="espresso" />
+          <KpiCard icon={<Icons.Archive />} label="All-Time Records"  value={stats.allTimeTotal ?? "—"} tone="neutral" />
         </div>
 
-        <div className="chat-panel">
-          {!activeConversation ? (
-            <div className="empty-chat">
-              Select a conversation to start chatting
+        {/* ── Toolbar ── */}
+        <div className="att-toolbar">
+          {/* Search */}
+          <div className="att-search-wrap">
+            <Icons.Search />
+            <input
+              className="att-search-input"
+              placeholder="Search by name or LRN…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && (
+              <button className="att-clear-btn" onClick={() => setSearch("")}>
+                <Icons.X />
+              </button>
+            )}
+          </div>
+
+          {/* Date filter */}
+          <div className="att-date-row">
+            <span className="att-date-label">
+              <Icons.Calendar /> Date
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="att-date-input"
+            />
+            <button className="att-tab-btn att-tab-btn--active" onClick={() => setDate(todayDate())}>
+              Today
+            </button>
+            <button className="att-tab-btn" onClick={() => setDate("")}>
+              All dates
+            </button>
+          </div>
+        </div>
+
+        {/* ── Table card ── */}
+        <div className="att-card">
+
+          {/* Card header */}
+          <div className="att-card-header">
+            <div>
+              <p className="att-card-title">Attendance Log</p>
+              <p className="att-card-sub">
+                {loading ? "Loading…" : `${total} record${total !== 1 ? "s" : ""} found`}
+              </p>
+            </div>
+            <span className="att-date-chip">
+              <Icons.Calendar />
+              {date || "All dates"}
+            </span>
+          </div>
+
+          {/* Content */}
+          {loading ? (
+            <div className="att-state">
+              <div className="att-spinner" />
+              <span>Loading records…</span>
+            </div>
+          ) : attendance.length === 0 ? (
+            <div className="att-state">
+              <Icons.Archive />
+              <span>No attendance records found.</span>
             </div>
           ) : (
-            <>
-              <div className="chat-header">
-                <h3>{activeConversation.user_name}</h3>
-              </div>
+            <div className="att-table-wrap">
+              <table className="att-table">
+                <thead>
+                  <tr>
+                    {["Student", "LRN", "Date", "Time In", "Time Out", "Duration", "Status"].map(h => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendance.map((row) => (
+                    <tr key={row.id}>
+                      <td className="att-name">{row.full_name}</td>
+                      <td className="att-mono">{row.lrn || "—"}</td>
+                      <td className="att-mono">{row.date}</td>
+                      <td className="att-time-in">{formatTime(row.time_in)}</td>
+                      <td className="att-time-out">{formatTime(row.time_out)}</td>
+                      <td className="att-duration">{getDuration(row.time_in, row.time_out)}</td>
+                      <td><StatusBadge row={row} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-              <div
-                className="messages"
-                ref={messagesContainerRef}
-                onScroll={handleScroll}
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="att-pagination">
+              <button
+                className="att-page-btn"
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
               >
-                {loadingMessages ? (
-                  <p className="center">Loading messages...</p>
-                ) : (
-                  messages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`message ${
-                        msg.sender === "admin" ? "admin" : "user"
-                      }`}
-                    >
-                      <div className="bubble">{msg.message}</div>
-                      <span className="time">
-                        {new Date(msg.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="input-area">
-                <input
-                  type="text"
-                  placeholder="Type message..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                />
-                <button onClick={sendMessage}>Send</button>
-              </div>
-            </>
+                <Icons.Prev /> Prev
+              </button>
+              <span className="att-page-info">
+                Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+              </span>
+              <button
+                className="att-page-btn"
+                disabled={page === totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next <Icons.Next />
+              </button>
+            </div>
           )}
         </div>
       </div>
 
-      <style >{`
-        .chat-container {
-          margin-left: 260px;
-          display: flex;
-          height: 100vh;
-          background: #f9fbe7;
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+        :root {
+          --forest:    #14532D;
+          --forest-lt: #3E7A4D;
+          --gold:      #B8860B;
+          --espresso:  #5C3D2E;
+          --rust:      #A13D2B;
+          --parchment: #FAF6EE;
+          --sage:      #EEF3E7;
+          --ink:       #241F18;
+          --ink-soft:  #5C5546;
+          --line:      #E4DFD3;
         }
-        .conversation-list {
-          width: 320px;
-          background: white;
-          border-right: 1px solid #ddd;
-          overflow-y: auto;
-          padding: 20px;
+
+        /* ── Layout ── */
+        .att-main {
+          margin-left: 248px;
+          padding: 36px 40px 64px;
+          background: var(--parchment);
+          min-height: 100vh;
+          font-family: 'Inter', sans-serif;
+          color: var(--ink);
+          box-sizing: border-box;
         }
-        .search-input {
-          width: 100%;
-          padding: 8px;
-          margin-bottom: 15px;
-          border-radius: 8px;
-          border: 1px solid #ccc;
+
+        /* ── Header ── */
+        .att-header {
+          display: flex; justify-content: space-between; align-items: flex-end;
+          margin-bottom: 28px;
         }
-        .conversation-item {
-          padding: 12px;
-          border-radius: 8px;
-          margin-bottom: 10px;
-          cursor: pointer;
-          position: relative;
-          background: #f1f8e9;
+        .att-eyebrow {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem; letter-spacing: 0.14em;
+          text-transform: uppercase; color: var(--gold);
+          margin: 0 0 5px; font-weight: 600;
         }
-        .conversation-item.active {
-          background: #c8e6c9;
+        .att-title {
+          font-family: 'Fraunces', serif;
+          font-size: 2rem; font-weight: 600;
+          color: var(--forest); margin: 0; letter-spacing: -0.01em;
         }
-        .top-row {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.85rem;
+        .att-refresh-btn {
+          display: flex; align-items: center; gap: 6px;
+          background: white; border: 1px solid var(--line);
+          color: var(--ink-soft); padding: 8px 14px;
+          border-radius: 6px; font-size: 0.82rem; font-weight: 500;
+          cursor: pointer; font-family: 'Inter', sans-serif;
+          transition: border-color 0.15s, color 0.15s;
         }
-        .preview {
-          font-size: 0.85rem;
-          color: #555;
+        .att-refresh-btn:hover { border-color: var(--forest); color: var(--forest); }
+
+        /* ── KPI strip ── */
+        .att-kpi-strip {
+          display: grid; grid-template-columns: repeat(4, 1fr);
+          gap: 16px; margin-bottom: 24px;
         }
-        .badge {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-          background: #e53935;
-          color: white;
-          font-size: 0.75rem;
-          padding: 3px 7px;
-          border-radius: 50%;
+        .att-kpi {
+          background: white; border: 1px solid var(--line);
+          border-radius: 6px; padding: 16px 18px;
+          border-left: 4px solid var(--line);
+          display: flex; align-items: center; gap: 14px;
         }
-        .chat-panel {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
+        .att-kpi.tone-forest   { border-left-color: var(--forest); }
+        .att-kpi.tone-gold     { border-left-color: var(--gold); }
+        .att-kpi.tone-espresso { border-left-color: var(--espresso); }
+        .att-kpi.tone-neutral  { border-left-color: var(--ink-soft); }
+        .att-kpi-icon {
+          display: flex; align-items: center; justify-content: center;
+          width: 32px; height: 32px; border-radius: 6px;
+          background: var(--sage); color: var(--forest); flex-shrink: 0;
         }
-        .chat-header {
-          padding: 15px;
-          background: #c5e1a5;
-          font-weight: bold;
+        .att-kpi-value {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 1.7rem; font-weight: 600;
+          color: var(--ink); line-height: 1;
         }
-        .messages {
-          flex: 1;
-          padding: 15px;
-          overflow-y: auto;
+        .att-kpi-label {
+          font-size: 0.72rem; color: var(--ink-soft);
+          text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;
         }
-        .message {
-          margin-bottom: 10px;
-          display: flex;
-          flex-direction: column;
+
+        /* ── Toolbar ── */
+        .att-toolbar {
+          display: flex; gap: 12px; flex-wrap: wrap;
+          align-items: center; margin-bottom: 16px;
         }
-        .message.admin {
-          align-items: flex-end;
+        .att-search-wrap {
+          display: flex; align-items: center; gap: 8px;
+          background: white; border: 1px solid var(--line);
+          border-radius: 6px; padding: 8px 12px;
+          flex: 1; min-width: 240px;
+          transition: border-color 0.15s;
         }
-        .bubble {
-          padding: 8px 12px;
-          border-radius: 12px;
-          max-width: 70%;
-          background: #fff9c4;
+        .att-search-wrap:focus-within { border-color: var(--forest); }
+        .att-search-wrap svg { color: var(--ink-soft); flex-shrink: 0; }
+        .att-search-input {
+          border: none; outline: none; flex: 1;
+          font-size: 0.85rem; font-family: 'Inter', sans-serif;
+          color: var(--ink); background: transparent;
         }
-        .message.admin .bubble {
-          background: #c8e6c9;
+        .att-search-input::placeholder { color: #B0A89C; }
+        .att-clear-btn {
+          background: none; border: none; cursor: pointer;
+          color: var(--ink-soft); display: flex;
+          align-items: center; padding: 2px;
         }
-        .time {
-          font-size: 0.7rem;
-          color: #777;
+        .att-clear-btn:hover { color: var(--ink); }
+
+        /* Date filter row */
+        .att-date-row {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
         }
-        .input-area {
-          display: flex;
-          padding: 10px;
-          border-top: 1px solid #ddd;
+        .att-date-label {
+          display: flex; align-items: center; gap: 5px;
+          font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap;
         }
-        .input-area input {
-          flex: 1;
-          padding: 8px;
-          border-radius: 8px;
-          border: 1px solid #ccc;
+        .att-date-input {
+          padding: 7px 10px; border: 1px solid var(--line);
+          border-radius: 6px; font-size: 0.84rem;
+          font-family: 'Inter', sans-serif;
+          background: white; color: var(--ink);
+          outline: none; transition: border-color 0.15s;
         }
-        .input-area button {
-          margin-left: 10px;
-          padding: 8px 16px;
-          border: none;
-          border-radius: 8px;
-          background: #2e7d32;
-          color: white;
-          font-weight: bold;
+        .att-date-input:focus { border-color: var(--forest); }
+
+        /* Today / All-dates tab buttons */
+        .att-tab-btn {
+          padding: 7px 14px; border-radius: 6px;
+          border: 1px solid var(--line); background: white;
+          color: var(--ink-soft); font-size: 0.8rem;
+          font-weight: 500; cursor: pointer;
+          font-family: 'Inter', sans-serif; white-space: nowrap;
+          transition: background 0.12s, border-color 0.12s, color 0.12s;
         }
-        .center,
-        .empty-chat {
-          text-align: center;
-          color: #777;
-          margin-top: 40px;
+        .att-tab-btn:hover { background: var(--sage); border-color: var(--forest); color: var(--forest); }
+        .att-tab-btn--active {
+          background: var(--sage); border-color: var(--forest);
+          color: var(--forest); font-weight: 600;
+        }
+
+        /* ── Card ── */
+        .att-card {
+          background: white; border: 1px solid var(--line);
+          border-radius: 6px; overflow: hidden;
+        }
+        .att-card-header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          padding: 16px 20px; border-bottom: 1px solid var(--line);
+        }
+        .att-card-title {
+          font-family: 'Fraunces', serif;
+          font-size: 1rem; font-weight: 600;
+          color: var(--forest); margin: 0 0 2px;
+        }
+        .att-card-sub {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.72rem; color: var(--ink-soft); margin: 0;
+        }
+        .att-date-chip {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.72rem; color: var(--ink-soft);
+          background: var(--sage); border: 1px solid var(--line);
+          padding: 4px 10px; border-radius: 20px; white-space: nowrap;
+        }
+
+        /* ── State (empty / loading) ── */
+        .att-state {
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          gap: 12px; padding: 60px 0;
+          color: var(--ink-soft); font-size: 0.88rem;
+        }
+        .att-state svg { opacity: 0.3; }
+        .att-spinner {
+          width: 24px; height: 24px;
+          border: 2.5px solid var(--line); border-top-color: var(--forest);
+          border-radius: 50%; animation: att-spin 0.7s linear infinite;
+        }
+        @keyframes att-spin { to { transform: rotate(360deg); } }
+
+        /* ── Table ── */
+        .att-table-wrap { overflow-x: auto; }
+        .att-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+
+        .att-table thead th {
+          padding: 10px 16px;
+          background: var(--sage);
+          text-align: left; font-size: 0.7rem;
+          font-weight: 600; text-transform: uppercase;
+          letter-spacing: 0.07em; color: var(--forest);
+          border-bottom: 1px solid var(--line); white-space: nowrap;
+        }
+        .att-table tbody td {
+          padding: 11px 16px;
+          border-bottom: 1px solid var(--line);
+          color: var(--ink);
+        }
+        .att-table tbody tr:last-child td { border-bottom: none; }
+        .att-table tbody tr:hover td { background: #FDFAF5; }
+
+        .att-name  { font-weight: 600; }
+        .att-mono  {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.8rem; color: var(--ink-soft);
+        }
+        .att-time-in  {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.82rem; color: var(--forest); font-weight: 600;
+        }
+        .att-time-out {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.82rem; color: var(--rust); font-weight: 600;
+        }
+        .att-duration {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.8rem; color: var(--espresso); font-weight: 500;
+        }
+        .att-null { color: var(--line); font-style: italic; }
+
+        /* ── Status badges ── */
+        .att-badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 3px 10px; border-radius: 20px;
+          font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+        }
+        .badge-in  { background: #FEF3C7; color: #92400E; border: 1px solid #F6D860; }
+        .badge-out { background: var(--sage); color: var(--forest); border: 1px solid #C5DCBB; }
+
+        /* ── Pagination ── */
+        .att-pagination {
+          display: flex; justify-content: center; align-items: center;
+          gap: 16px; padding: 14px 20px; border-top: 1px solid var(--line);
+        }
+        .att-page-btn {
+          display: flex; align-items: center; gap: 5px;
+          padding: 7px 14px; border-radius: 6px;
+          border: 1px solid var(--line); background: white;
+          color: var(--forest); font-size: 0.82rem; font-weight: 600;
+          cursor: pointer; font-family: 'Inter', sans-serif;
+          transition: background 0.12s, border-color 0.12s;
+        }
+        .att-page-btn:hover:not(:disabled) { background: var(--sage); border-color: var(--forest); }
+        .att-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .att-page-info {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.8rem; color: var(--ink-soft);
+        }
+        .att-page-info strong { color: var(--ink); }
+
+        /* ── Responsive ── */
+        @media (max-width: 1100px) {
+          .att-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 1000px) {
+          .att-main { margin-left: 0; padding: 24px 20px 48px; }
+        }
+        @media (max-width: 640px) {
+          .att-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+          .att-kpi-strip { grid-template-columns: 1fr 1fr; }
+          .att-toolbar { flex-direction: column; align-items: stretch; }
+          .att-date-row { flex-wrap: wrap; }
         }
       `}</style>
     </>
+  );
+}
+
+/* ── KPI card ── */
+function KpiCard({ icon, label, value, tone }) {
+  return (
+    <div className={`att-kpi tone-${tone}`}>
+      <div className="att-kpi-icon">{icon}</div>
+      <div>
+        <div className="att-kpi-value">{value}</div>
+        <div className="att-kpi-label">{label}</div>
+      </div>
+    </div>
   );
 }

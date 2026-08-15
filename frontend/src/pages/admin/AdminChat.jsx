@@ -1,227 +1,334 @@
-// src/pages/admin/AttendanceManagement.jsx
-import { useEffect, useState } from "react";
+// src/pages/admin/AdminChat.jsx
+import { useEffect, useState, useRef, useCallback } from "react";
 import AdminSidebar from "../../components/AdminSidebar";
+import socket from "../../socket";
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const Icons = {
-  Users:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-  Clock:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-  LogOut:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
-  Archive:  () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>,
-  Search:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-  X:        () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  Calendar: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
-  Refresh:  () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.28-3.41"/></svg>,
-  Prev:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
-  Next:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
-  Dot:      ({ color }) => <svg width="7" height="7" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill={color}/></svg>,
+  Search:  () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  Send:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+  Chat:    () => <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  User:    () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
 };
 
-function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+// ── Format helpers ─────────────────────────────────────────────────────────────
+function formatTime(dt) {
+  if (!dt) return "";
+  const d = new Date(dt);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  return isToday
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default function AttendanceManagement() {
-  const baseURL = import.meta.env.VITE_API_URL;
+function formatMsgTime(dt) {
+  if (!dt) return "";
+  return new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Avatar initials ───────────────────────────────────────────────────────────
+function Avatar({ name, size = 36 }) {
+  const initials = (name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  return (
+    <div className="ch-avatar" style={{ width: size, height: size, fontSize: size * 0.38 }}>
+      {initials}
+    </div>
+  );
+}
+
+export default function AdminChat() {
+  const [conversations, setConversations]             = useState([]);
+  const [filteredConversations, setFilteredConversations] = useState([]);
+  const [search, setSearch]                           = useState("");
+  const [activeConversation, setActiveConversation]   = useState(null);
+  const [messages, setMessages]                       = useState([]);
+  const [input, setInput]                             = useState("");
+  const [loadingMessages, setLoadingMessages]         = useState(false);
+
+  const messagesContainerRef = useRef(null);
+  const isUserNearBottom     = useRef(true);
+  const inputRef             = useRef(null);
+
   const token   = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "true" };
+  const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-  const [attendance, setAttendance] = useState([]);
-  const [stats, setStats]           = useState({});
-  const [search, setSearch]         = useState("");
-  const [date, setDate]             = useState(todayDate());
-  const [page, setPage]             = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal]           = useState(0);
-  const [loading, setLoading]       = useState(false);
-
-  const fetchStats = async () => {
+  /* ── Fetch conversations ── */
+  const fetchConversations = useCallback(async () => {
     try {
-      const res  = await fetch(`${baseURL}/api/attendance/stats`, { headers });
+      const res  = await fetch(`${baseUrl}/api/support/admin/conversations`, {
+        headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "anyvalue" },
+      });
       const data = await res.json();
-      setStats(data);
-    } catch (err) { console.error("Stats error:", err); }
-  };
+      const list = Array.isArray(data) ? data : [];
+      setConversations(list);
+      setFilteredConversations(
+        list.filter(c =>
+          `${c.user_name} ${c.lrn || ""}`.toLowerCase().includes(search.toLowerCase())
+        )
+      );
+    } catch (err) { console.error("Fetch conversations error:", err); }
+  }, [baseUrl, token, search]);
 
-  const fetchAttendance = async (p = 1) => {
-    setLoading(true);
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
+  /* ── Fetch messages ── */
+  const fetchMessages = useCallback(async (conversationId) => {
+    if (!conversationId) return;
+    setLoadingMessages(true);
     try {
-      const params = new URLSearchParams({ page: p, limit: 20, search, date });
-      const res    = await fetch(`${baseURL}/api/attendance?${params}`, { headers });
-      const data   = await res.json();
-      setAttendance(data.attendance || []);
-      setTotalPages(data.totalPages || 1);
-      setTotal(data.total || 0);
-    } catch (err) { console.error("Attendance fetch error:", err); }
-    finally { setLoading(false); }
+      const res  = await fetch(`${baseUrl}/api/support/${conversationId}/messages`, {
+        headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "anyvalue" },
+      });
+      const data = await res.json();
+      setMessages(Array.isArray(data) ? data : []);
+      await fetch(`${baseUrl}/api/support/${conversationId}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchConversations();
+    } catch (err) { console.error("Fetch messages error:", err); }
+    finally { setLoadingMessages(false); }
+  }, [baseUrl, token, fetchConversations]);
+
+  /* ── Socket ── */
+  useEffect(() => {
+    if (!socket.connected) socket.connect();
+    const handleNewMessage = (data) => {
+      setMessages(prev =>
+        activeConversation?.id === data.conversationId ? [...prev, data] : prev
+      );
+      fetchConversations();
+    };
+    socket.on("newMessage", handleNewMessage);
+    return () => socket.off("newMessage", handleNewMessage);
+  }, [activeConversation, fetchConversations]);
+
+  /* ── Open conversation ── */
+  const openConversation = (conv) => {
+    const id = conv.conversation_id || null;
+    setActiveConversation({ ...conv, id });
+    setMessages([]);
+    if (id) {
+      fetchMessages(id);
+      socket.emit("joinConversation", `${id}`);
+    }
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  useEffect(() => { fetchStats(); }, []);
-  useEffect(() => { setPage(1); fetchAttendance(1); }, [search, date]);
-  useEffect(() => { fetchAttendance(page); }, [page]);
-
-  /* ── Formatters ── */
-  const formatTime = (dt) => {
-    if (!dt) return <span className="att-null">—</span>;
-    return new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  /* ── Send message ── */
+  const sendMessage = async () => {
+    if (!input.trim() || !activeConversation) return;
+    try {
+      const body = { message: input };
+      if (!activeConversation.id && activeConversation.user_id) {
+        body.studentId = activeConversation.user_id;
+      } else {
+        body.conversationId = activeConversation.id;
+      }
+      const res  = await fetch(`${baseUrl}/api/support/send`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "anyvalue",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      setInput("");
+      if (!activeConversation.id && data?.conversationId) {
+        const newId = data.conversationId;
+        setActiveConversation(prev => ({ ...prev, id: newId }));
+        socket.emit("joinConversation", `${newId}`);
+        fetchMessages(newId);
+      }
+    } catch (err) { console.error("Send message error:", err); }
   };
 
-  const getDuration = (timeIn, timeOut) => {
-    if (!timeIn || !timeOut) return "—";
-    const diff = new Date(timeOut) - new Date(timeIn);
-    const hrs  = Math.floor(diff / 3600000);
-    const mins = Math.floor((diff % 3600000) / 60000);
-    return `${hrs}h ${mins}m`;
+  /* ── Scroll handling ── */
+  const handleScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    isUserNearBottom.current = (el.scrollHeight - el.scrollTop - el.clientHeight) < 100;
   };
 
-  const StatusBadge = ({ row }) => row.time_out
-    ? <span className="att-badge badge-out"><Icons.Dot color="#14532D" /> Completed</span>
-    : <span className="att-badge badge-in"><Icons.Dot color="#B8860B" /> Inside</span>;
+  useEffect(() => {
+    if (loadingMessages) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    setTimeout(() => { el.scrollTop = el.scrollHeight; }, 200);
+  }, [loadingMessages]);
+
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el || !isUserNearBottom.current) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  // Group messages by date for date dividers
+  const groupedMessages = messages.reduce((groups, msg) => {
+    const date = new Date(msg.created_at).toDateString();
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(msg);
+    return groups;
+  }, {});
+
+  const formatDateLabel = (dateStr) => {
+    const d   = new Date(dateStr);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return "Today";
+    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  };
 
   return (
     <>
       <AdminSidebar />
 
-      <div className="att-main">
+      <div className="ch-root">
 
-        {/* ── Page header ── */}
-        <header className="att-header">
-          <div>
-            <p className="att-eyebrow">Library Operations</p>
-            <h1 className="att-title">Attendance Management</h1>
+        {/* ══ Sidebar panel ══ */}
+        <aside className="ch-sidebar">
+          {/* Header */}
+          <div className="ch-sidebar-head">
+            <p className="ch-sidebar-eyebrow">Support</p>
+            <h2 className="ch-sidebar-title">Messages</h2>
           </div>
-          <button
-            className="att-refresh-btn"
-            onClick={() => { fetchStats(); fetchAttendance(page); }}
-          >
-            <Icons.Refresh /> Refresh
-          </button>
-        </header>
 
-        {/* ── KPI strip ── */}
-        <div className="att-kpi-strip">
-          <KpiCard icon={<Icons.Users />}   label="Currently Inside"  value={stats.currentlyIn  ?? "—"} tone="gold" />
-          <KpiCard icon={<Icons.Clock />}   label="Today's Visitors"  value={stats.todayTotal   ?? "—"} tone="forest" />
-          <KpiCard icon={<Icons.LogOut />}  label="Timed Out Today"   value={stats.todayOut     ?? "—"} tone="espresso" />
-          <KpiCard icon={<Icons.Archive />} label="All-Time Records"  value={stats.allTimeTotal ?? "—"} tone="neutral" />
-        </div>
-
-        {/* ── Toolbar ── */}
-        <div className="att-toolbar">
           {/* Search */}
-          <div className="att-search-wrap">
+          <div className="ch-search-wrap">
             <Icons.Search />
             <input
-              className="att-search-input"
-              placeholder="Search by name or LRN…"
+              className="ch-search-input"
+              placeholder="Search students…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            {search && (
-              <button className="att-clear-btn" onClick={() => setSearch("")}>
-                <Icons.X />
-              </button>
-            )}
           </div>
 
-          {/* Date filter */}
-          <div className="att-date-row">
-            <span className="att-date-label">
-              <Icons.Calendar /> Date
-            </span>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              className="att-date-input"
-            />
-            <button className="att-tab-btn att-tab-btn--active" onClick={() => setDate(todayDate())}>
-              Today
-            </button>
-            <button className="att-tab-btn" onClick={() => setDate("")}>
-              All dates
-            </button>
+          {/* Conversation list */}
+          <div className="ch-conv-list">
+            {filteredConversations.length === 0 ? (
+              <p className="ch-conv-empty">No conversations found.</p>
+            ) : filteredConversations.map(conv => {
+              const isActive  = activeConversation?.id === conv.conversation_id;
+              const hasUnread = conv.unread_count > 0;
+              return (
+                <button
+                  key={conv.user_id}
+                  className={`ch-conv-item ${isActive ? "ch-conv-active" : ""}`}
+                  onClick={() => openConversation(conv)}
+                >
+                  <Avatar name={conv.user_name} size={38} />
+                  <div className="ch-conv-body">
+                    <div className="ch-conv-top">
+                      <span className={`ch-conv-name ${hasUnread ? "ch-conv-name--unread" : ""}`}>
+                        {conv.user_name}
+                      </span>
+                      <span className="ch-conv-time">{formatTime(conv.last_message_at)}</span>
+                    </div>
+                    <p className={`ch-conv-preview ${hasUnread ? "ch-conv-preview--unread" : ""}`}>
+                      {conv.last_message || "No messages yet"}
+                    </p>
+                  </div>
+                  {hasUnread && (
+                    <span className="ch-unread-badge">{conv.unread_count}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </aside>
 
-        {/* ── Table card ── */}
-        <div className="att-card">
-
-          {/* Card header */}
-          <div className="att-card-header">
-            <div>
-              <p className="att-card-title">Attendance Log</p>
-              <p className="att-card-sub">
-                {loading ? "Loading…" : `${total} record${total !== 1 ? "s" : ""} found`}
-              </p>
-            </div>
-            <span className="att-date-chip">
-              <Icons.Calendar />
-              {date || "All dates"}
-            </span>
-          </div>
-
-          {/* Content */}
-          {loading ? (
-            <div className="att-state">
-              <div className="att-spinner" />
-              <span>Loading records…</span>
-            </div>
-          ) : attendance.length === 0 ? (
-            <div className="att-state">
-              <Icons.Archive />
-              <span>No attendance records found.</span>
+        {/* ══ Chat panel ══ */}
+        <main className="ch-panel">
+          {!activeConversation ? (
+            <div className="ch-empty">
+              <div className="ch-empty-icon"><Icons.Chat /></div>
+              <p className="ch-empty-title">No conversation selected</p>
+              <p className="ch-empty-sub">Choose a student from the list to view messages.</p>
             </div>
           ) : (
-            <div className="att-table-wrap">
-              <table className="att-table">
-                <thead>
-                  <tr>
-                    {["Student", "LRN", "Date", "Time In", "Time Out", "Duration", "Status"].map(h => (
-                      <th key={h}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendance.map((row) => (
-                    <tr key={row.id}>
-                      <td className="att-name">{row.full_name}</td>
-                      <td className="att-mono">{row.lrn || "—"}</td>
-                      <td className="att-mono">{row.date}</td>
-                      <td className="att-time-in">{formatTime(row.time_in)}</td>
-                      <td className="att-time-out">{formatTime(row.time_out)}</td>
-                      <td className="att-duration">{getDuration(row.time_in, row.time_out)}</td>
-                      <td><StatusBadge row={row} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            <>
+              {/* Chat header */}
+              <div className="ch-panel-header">
+                <Avatar name={activeConversation.user_name} size={36} />
+                <div className="ch-panel-header-info">
+                  <span className="ch-panel-name">{activeConversation.user_name}</span>
+                  {activeConversation.lrn && (
+                    <span className="ch-panel-lrn">LRN {activeConversation.lrn}</span>
+                  )}
+                </div>
+              </div>
 
-          {/* Pagination */}
-          {!loading && totalPages > 1 && (
-            <div className="att-pagination">
-              <button
-                className="att-page-btn"
-                disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
+              {/* Messages area */}
+              <div
+                className="ch-messages"
+                ref={messagesContainerRef}
+                onScroll={handleScroll}
               >
-                <Icons.Prev /> Prev
-              </button>
-              <span className="att-page-info">
-                Page <strong>{page}</strong> of <strong>{totalPages}</strong>
-              </span>
-              <button
-                className="att-page-btn"
-                disabled={page === totalPages}
-                onClick={() => setPage(p => p + 1)}
-              >
-                Next <Icons.Next />
-              </button>
-            </div>
+                {loadingMessages ? (
+                  <div className="ch-msg-state">
+                    <div className="ch-spinner" />
+                    <span>Loading messages…</span>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="ch-msg-state">
+                    <Icons.Chat />
+                    <span>No messages yet. Say hello!</span>
+                  </div>
+                ) : (
+                  Object.entries(groupedMessages).map(([dateStr, msgs]) => (
+                    <div key={dateStr}>
+                      {/* Date divider */}
+                      <div className="ch-date-divider">
+                        <span>{formatDateLabel(dateStr)}</span>
+                      </div>
+
+                      {msgs.map((msg, idx) => {
+                        const isAdmin = msg.sender === "admin";
+                        return (
+                          <div key={idx} className={`ch-msg-row ${isAdmin ? "ch-msg-row--admin" : ""}`}>
+                            {!isAdmin && <Avatar name={activeConversation.user_name} size={28} />}
+                            <div className="ch-msg-col">
+                              <div className={`ch-bubble ${isAdmin ? "ch-bubble--admin" : "ch-bubble--user"}`}>
+                                {msg.message}
+                              </div>
+                              <span className="ch-msg-time">{formatMsgTime(msg.created_at)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Input area */}
+              <div className="ch-input-area">
+                <input
+                  ref={inputRef}
+                  className="ch-input"
+                  type="text"
+                  placeholder="Type a message…"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                />
+                <button
+                  className="ch-send-btn"
+                  onClick={sendMessage}
+                  disabled={!input.trim()}
+                >
+                  <Icons.Send />
+                  <span>Send</span>
+                </button>
+              </div>
+            </>
           )}
-        </div>
+        </main>
       </div>
 
       <style>{`
@@ -232,7 +339,6 @@ export default function AttendanceManagement() {
           --forest-lt: #3E7A4D;
           --gold:      #B8860B;
           --espresso:  #5C3D2E;
-          --rust:      #A13D2B;
           --parchment: #FAF6EE;
           --sage:      #EEF3E7;
           --ink:       #241F18;
@@ -240,269 +346,274 @@ export default function AttendanceManagement() {
           --line:      #E4DFD3;
         }
 
-        /* ── Layout ── */
-        .att-main {
+        /* ── Root shell ── */
+        .ch-root {
           margin-left: 248px;
-          padding: 36px 40px 64px;
+          display: flex;
+          height: 100dvh;
           background: var(--parchment);
-          min-height: 100vh;
           font-family: 'Inter', sans-serif;
           color: var(--ink);
-          box-sizing: border-box;
+          overflow: hidden;
         }
 
-        /* ── Header ── */
-        .att-header {
-          display: flex; justify-content: space-between; align-items: flex-end;
-          margin-bottom: 28px;
+        /* ══ Conversation sidebar ══ */
+        .ch-sidebar {
+          width: 300px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          background: white;
+          border-right: 1px solid var(--line);
+          overflow: hidden;
         }
-        .att-eyebrow {
+
+        .ch-sidebar-head {
+          padding: 24px 20px 14px;
+          border-bottom: 1px solid var(--line);
+          flex-shrink: 0;
+        }
+        .ch-sidebar-eyebrow {
           font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.68rem; letter-spacing: 0.14em;
+          font-size: 0.62rem; letter-spacing: 0.14em;
           text-transform: uppercase; color: var(--gold);
-          margin: 0 0 5px; font-weight: 600;
+          margin: 0 0 3px; font-weight: 600;
         }
-        .att-title {
+        .ch-sidebar-title {
           font-family: 'Fraunces', serif;
-          font-size: 2rem; font-weight: 600;
-          color: var(--forest); margin: 0; letter-spacing: -0.01em;
-        }
-        .att-refresh-btn {
-          display: flex; align-items: center; gap: 6px;
-          background: white; border: 1px solid var(--line);
-          color: var(--ink-soft); padding: 8px 14px;
-          border-radius: 6px; font-size: 0.82rem; font-weight: 500;
-          cursor: pointer; font-family: 'Inter', sans-serif;
-          transition: border-color 0.15s, color 0.15s;
-        }
-        .att-refresh-btn:hover { border-color: var(--forest); color: var(--forest); }
-
-        /* ── KPI strip ── */
-        .att-kpi-strip {
-          display: grid; grid-template-columns: repeat(4, 1fr);
-          gap: 16px; margin-bottom: 24px;
-        }
-        .att-kpi {
-          background: white; border: 1px solid var(--line);
-          border-radius: 6px; padding: 16px 18px;
-          border-left: 4px solid var(--line);
-          display: flex; align-items: center; gap: 14px;
-        }
-        .att-kpi.tone-forest   { border-left-color: var(--forest); }
-        .att-kpi.tone-gold     { border-left-color: var(--gold); }
-        .att-kpi.tone-espresso { border-left-color: var(--espresso); }
-        .att-kpi.tone-neutral  { border-left-color: var(--ink-soft); }
-        .att-kpi-icon {
-          display: flex; align-items: center; justify-content: center;
-          width: 32px; height: 32px; border-radius: 6px;
-          background: var(--sage); color: var(--forest); flex-shrink: 0;
-        }
-        .att-kpi-value {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 1.7rem; font-weight: 600;
-          color: var(--ink); line-height: 1;
-        }
-        .att-kpi-label {
-          font-size: 0.72rem; color: var(--ink-soft);
-          text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;
+          font-size: 1.25rem; font-weight: 600;
+          color: var(--forest); margin: 0;
         }
 
-        /* ── Toolbar ── */
-        .att-toolbar {
-          display: flex; gap: 12px; flex-wrap: wrap;
-          align-items: center; margin-bottom: 16px;
-        }
-        .att-search-wrap {
+        /* Search */
+        .ch-search-wrap {
           display: flex; align-items: center; gap: 8px;
-          background: white; border: 1px solid var(--line);
-          border-radius: 6px; padding: 8px 12px;
-          flex: 1; min-width: 240px;
+          margin: 12px 14px;
+          background: var(--parchment); border: 1px solid var(--line);
+          border-radius: 6px; padding: 8px 10px;
+          flex-shrink: 0; transition: border-color 0.15s;
+        }
+        .ch-search-wrap:focus-within { border-color: var(--forest); }
+        .ch-search-wrap svg { color: var(--ink-soft); flex-shrink: 0; }
+        .ch-search-input {
+          border: none; outline: none; background: transparent;
+          flex: 1; font-size: 0.83rem;
+          font-family: 'Inter', sans-serif; color: var(--ink);
+        }
+        .ch-search-input::placeholder { color: #B0A89C; }
+
+        /* Conversation list */
+        .ch-conv-list {
+          flex: 1; overflow-y: auto; padding: 4px 8px 12px;
+          scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+        }
+        .ch-conv-empty {
+          font-size: 0.82rem; color: var(--ink-soft);
+          text-align: center; padding: 24px 0;
+        }
+
+        /* Conversation item */
+        .ch-conv-item {
+          width: 100%; display: flex; align-items: flex-start;
+          gap: 10px; padding: 10px 10px;
+          border-radius: 6px; border: none;
+          background: transparent; cursor: pointer; text-align: left;
+          position: relative; transition: background 0.12s;
+          margin-bottom: 2px;
+        }
+        .ch-conv-item:hover { background: var(--sage); }
+        .ch-conv-item.ch-conv-active { background: var(--sage); }
+        .ch-conv-item.ch-conv-active::before {
+          content: '';
+          position: absolute; left: 0; top: 20%; bottom: 20%;
+          width: 3px; border-radius: 99px; background: var(--forest);
+        }
+
+        /* Avatar */
+        .ch-avatar {
+          border-radius: 50%; background: var(--forest);
+          color: white; font-family: 'Fraunces', serif;
+          font-weight: 600; display: flex; align-items: center;
+          justify-content: center; flex-shrink: 0; line-height: 1;
+        }
+
+        .ch-conv-body { flex: 1; min-width: 0; }
+        .ch-conv-top {
+          display: flex; justify-content: space-between;
+          align-items: baseline; gap: 6px; margin-bottom: 2px;
+        }
+        .ch-conv-name {
+          font-size: 0.85rem; font-weight: 500;
+          color: var(--ink); white-space: nowrap;
+          overflow: hidden; text-overflow: ellipsis;
+          max-width: 130px;
+        }
+        .ch-conv-name--unread { font-weight: 700; }
+        .ch-conv-time {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem; color: var(--ink-soft); flex-shrink: 0;
+        }
+        .ch-conv-preview {
+          font-size: 0.78rem; color: var(--ink-soft); margin: 0;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ch-conv-preview--unread { color: var(--ink); font-weight: 500; }
+
+        /* Unread badge */
+        .ch-unread-badge {
+          position: absolute; top: 10px; right: 10px;
+          background: var(--forest); color: white;
+          font-size: 0.65rem; font-weight: 700;
+          min-width: 18px; height: 18px; border-radius: 99px;
+          display: flex; align-items: center; justify-content: center;
+          padding: 0 5px; font-family: 'IBM Plex Mono', monospace;
+        }
+
+        /* ══ Chat panel ══ */
+        .ch-panel {
+          flex: 1; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* Empty state */
+        .ch-empty {
+          flex: 1; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 12px;
+          color: var(--ink-soft);
+        }
+        .ch-empty-icon {
+          width: 64px; height: 64px; border-radius: 50%;
+          background: var(--sage); display: flex;
+          align-items: center; justify-content: center;
+          color: var(--ink-soft);
+        }
+        .ch-empty-title {
+          font-family: 'Fraunces', serif; font-size: 1.1rem;
+          color: var(--ink); margin: 0; font-weight: 600;
+        }
+        .ch-empty-sub { font-size: 0.83rem; margin: 0; color: var(--ink-soft); }
+
+        /* Chat header */
+        .ch-panel-header {
+          display: flex; align-items: center; gap: 12px;
+          padding: 14px 20px; background: white;
+          border-bottom: 1px solid var(--line); flex-shrink: 0;
+        }
+        .ch-panel-header-info { display: flex; flex-direction: column; gap: 1px; }
+        .ch-panel-name { font-weight: 600; font-size: 0.92rem; color: var(--ink); }
+        .ch-panel-lrn {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem; color: var(--ink-soft);
+        }
+
+        /* Messages */
+        .ch-messages {
+          flex: 1; overflow-y: auto; padding: 20px 24px;
+          display: flex; flex-direction: column; gap: 2px;
+          scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+        }
+
+        /* Loading / empty state in messages */
+        .ch-msg-state {
+          flex: 1; display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          gap: 12px; color: var(--ink-soft); font-size: 0.85rem;
+          padding: 40px 0;
+        }
+        .ch-msg-state svg { opacity: 0.3; }
+        .ch-spinner {
+          width: 22px; height: 22px;
+          border: 2.5px solid var(--line); border-top-color: var(--forest);
+          border-radius: 50%; animation: ch-spin 0.7s linear infinite;
+        }
+        @keyframes ch-spin { to { transform: rotate(360deg); } }
+
+        /* Date divider */
+        .ch-date-divider {
+          display: flex; align-items: center; gap: 12px;
+          margin: 18px 0 10px; color: var(--ink-soft);
+        }
+        .ch-date-divider::before,
+        .ch-date-divider::after {
+          content: ''; flex: 1; height: 1px; background: var(--line);
+        }
+        .ch-date-divider span {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.68rem; white-space: nowrap;
+          letter-spacing: 0.05em;
+        }
+
+        /* Message rows */
+        .ch-msg-row {
+          display: flex; align-items: flex-end; gap: 8px;
+          margin-bottom: 8px;
+        }
+        .ch-msg-row--admin { flex-direction: row-reverse; }
+
+        .ch-msg-col {
+          display: flex; flex-direction: column; gap: 3px;
+          max-width: 68%;
+        }
+        .ch-msg-row--admin .ch-msg-col { align-items: flex-end; }
+
+        /* Bubbles */
+        .ch-bubble {
+          padding: 10px 14px; border-radius: 16px;
+          font-size: 0.875rem; line-height: 1.5;
+          word-break: break-word;
+        }
+        .ch-bubble--user {
+          background: white; color: var(--ink);
+          border: 1px solid var(--line);
+          border-bottom-left-radius: 4px;
+        }
+        .ch-bubble--admin {
+          background: var(--forest); color: white;
+          border-bottom-right-radius: 4px;
+        }
+
+        .ch-msg-time {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.62rem; color: var(--ink-soft);
+          padding: 0 4px;
+        }
+
+        /* Input area */
+        .ch-input-area {
+          display: flex; align-items: center; gap: 10px;
+          padding: 14px 20px; background: white;
+          border-top: 1px solid var(--line); flex-shrink: 0;
+        }
+        .ch-input {
+          flex: 1; border: 1px solid var(--line); border-radius: 8px;
+          padding: 10px 14px; font-size: 0.875rem;
+          font-family: 'Inter', sans-serif; color: var(--ink);
+          outline: none; background: var(--parchment);
           transition: border-color 0.15s;
         }
-        .att-search-wrap:focus-within { border-color: var(--forest); }
-        .att-search-wrap svg { color: var(--ink-soft); flex-shrink: 0; }
-        .att-search-input {
-          border: none; outline: none; flex: 1;
-          font-size: 0.85rem; font-family: 'Inter', sans-serif;
-          color: var(--ink); background: transparent;
-        }
-        .att-search-input::placeholder { color: #B0A89C; }
-        .att-clear-btn {
-          background: none; border: none; cursor: pointer;
-          color: var(--ink-soft); display: flex;
-          align-items: center; padding: 2px;
-        }
-        .att-clear-btn:hover { color: var(--ink); }
+        .ch-input:focus { border-color: var(--forest); background: white; }
+        .ch-input::placeholder { color: #B0A89C; }
 
-        /* Date filter row */
-        .att-date-row {
-          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-        }
-        .att-date-label {
-          display: flex; align-items: center; gap: 5px;
-          font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap;
-        }
-        .att-date-input {
-          padding: 7px 10px; border: 1px solid var(--line);
-          border-radius: 6px; font-size: 0.84rem;
-          font-family: 'Inter', sans-serif;
-          background: white; color: var(--ink);
-          outline: none; transition: border-color 0.15s;
-        }
-        .att-date-input:focus { border-color: var(--forest); }
-
-        /* Today / All-dates tab buttons */
-        .att-tab-btn {
-          padding: 7px 14px; border-radius: 6px;
-          border: 1px solid var(--line); background: white;
-          color: var(--ink-soft); font-size: 0.8rem;
-          font-weight: 500; cursor: pointer;
+        .ch-send-btn {
+          display: flex; align-items: center; gap: 7px;
+          background: var(--forest); color: white;
+          border: none; border-radius: 8px;
+          padding: 10px 18px; font-size: 0.85rem;
+          font-weight: 600; cursor: pointer;
           font-family: 'Inter', sans-serif; white-space: nowrap;
-          transition: background 0.12s, border-color 0.12s, color 0.12s;
+          transition: background 0.15s;
         }
-        .att-tab-btn:hover { background: var(--sage); border-color: var(--forest); color: var(--forest); }
-        .att-tab-btn--active {
-          background: var(--sage); border-color: var(--forest);
-          color: var(--forest); font-weight: 600;
-        }
-
-        /* ── Card ── */
-        .att-card {
-          background: white; border: 1px solid var(--line);
-          border-radius: 6px; overflow: hidden;
-        }
-        .att-card-header {
-          display: flex; justify-content: space-between; align-items: flex-start;
-          padding: 16px 20px; border-bottom: 1px solid var(--line);
-        }
-        .att-card-title {
-          font-family: 'Fraunces', serif;
-          font-size: 1rem; font-weight: 600;
-          color: var(--forest); margin: 0 0 2px;
-        }
-        .att-card-sub {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.72rem; color: var(--ink-soft); margin: 0;
-        }
-        .att-date-chip {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.72rem; color: var(--ink-soft);
-          background: var(--sage); border: 1px solid var(--line);
-          padding: 4px 10px; border-radius: 20px; white-space: nowrap;
-        }
-
-        /* ── State (empty / loading) ── */
-        .att-state {
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
-          gap: 12px; padding: 60px 0;
-          color: var(--ink-soft); font-size: 0.88rem;
-        }
-        .att-state svg { opacity: 0.3; }
-        .att-spinner {
-          width: 24px; height: 24px;
-          border: 2.5px solid var(--line); border-top-color: var(--forest);
-          border-radius: 50%; animation: att-spin 0.7s linear infinite;
-        }
-        @keyframes att-spin { to { transform: rotate(360deg); } }
-
-        /* ── Table ── */
-        .att-table-wrap { overflow-x: auto; }
-        .att-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-
-        .att-table thead th {
-          padding: 10px 16px;
-          background: var(--sage);
-          text-align: left; font-size: 0.7rem;
-          font-weight: 600; text-transform: uppercase;
-          letter-spacing: 0.07em; color: var(--forest);
-          border-bottom: 1px solid var(--line); white-space: nowrap;
-        }
-        .att-table tbody td {
-          padding: 11px 16px;
-          border-bottom: 1px solid var(--line);
-          color: var(--ink);
-        }
-        .att-table tbody tr:last-child td { border-bottom: none; }
-        .att-table tbody tr:hover td { background: #FDFAF5; }
-
-        .att-name  { font-weight: 600; }
-        .att-mono  {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.8rem; color: var(--ink-soft);
-        }
-        .att-time-in  {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.82rem; color: var(--forest); font-weight: 600;
-        }
-        .att-time-out {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.82rem; color: var(--rust); font-weight: 600;
-        }
-        .att-duration {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.8rem; color: var(--espresso); font-weight: 500;
-        }
-        .att-null { color: var(--line); font-style: italic; }
-
-        /* ── Status badges ── */
-        .att-badge {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 3px 10px; border-radius: 20px;
-          font-size: 0.72rem; font-weight: 600; white-space: nowrap;
-        }
-        .badge-in  { background: #FEF3C7; color: #92400E; border: 1px solid #F6D860; }
-        .badge-out { background: var(--sage); color: var(--forest); border: 1px solid #C5DCBB; }
-
-        /* ── Pagination ── */
-        .att-pagination {
-          display: flex; justify-content: center; align-items: center;
-          gap: 16px; padding: 14px 20px; border-top: 1px solid var(--line);
-        }
-        .att-page-btn {
-          display: flex; align-items: center; gap: 5px;
-          padding: 7px 14px; border-radius: 6px;
-          border: 1px solid var(--line); background: white;
-          color: var(--forest); font-size: 0.82rem; font-weight: 600;
-          cursor: pointer; font-family: 'Inter', sans-serif;
-          transition: background 0.12s, border-color 0.12s;
-        }
-        .att-page-btn:hover:not(:disabled) { background: var(--sage); border-color: var(--forest); }
-        .att-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .att-page-info {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.8rem; color: var(--ink-soft);
-        }
-        .att-page-info strong { color: var(--ink); }
+        .ch-send-btn:hover:not(:disabled) { background: var(--forest-lt); }
+        .ch-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         /* ── Responsive ── */
-        @media (max-width: 1100px) {
-          .att-kpi-strip { grid-template-columns: repeat(2, 1fr); }
-        }
         @media (max-width: 1000px) {
-          .att-main { margin-left: 0; padding: 24px 20px 48px; }
+          .ch-root { margin-left: 0; }
         }
-        @media (max-width: 640px) {
-          .att-header { flex-direction: column; align-items: flex-start; gap: 12px; }
-          .att-kpi-strip { grid-template-columns: 1fr 1fr; }
-          .att-toolbar { flex-direction: column; align-items: stretch; }
-          .att-date-row { flex-wrap: wrap; }
+        @media (max-width: 700px) {
+          .ch-sidebar { width: 100%; position: absolute; z-index: 10; }
+          .ch-panel { display: none; }
         }
       `}</style>
     </>
-  );
-}
-
-/* ── KPI card ── */
-function KpiCard({ icon, label, value, tone }) {
-  return (
-    <div className={`att-kpi tone-${tone}`}>
-      <div className="att-kpi-icon">{icon}</div>
-      <div>
-        <div className="att-kpi-value">{value}</div>
-        <div className="att-kpi-label">{label}</div>
-      </div>
-    </div>
   );
 }

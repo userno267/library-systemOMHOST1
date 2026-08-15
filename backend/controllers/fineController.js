@@ -1,5 +1,33 @@
 import db from "../db/db.js";
 import crypto from "crypto";
+
+// Helper: send a notification without ever letting it fail the parent request.
+// A notification hiccup (bad enum value, missing io, etc.) should never turn
+// an already-committed fine action into a false 500 for the client.
+async function sendNotification(req, { userId, title, message }) {
+  try {
+    const [notifResult] = await db.query(
+      `INSERT INTO notifications (user_id, title, message, type)
+       VALUES (?, ?, ?, 'system')`,
+      [userId, title, message]
+    );
+
+    const [rows] = await db.query(
+      `SELECT * FROM notifications WHERE id = ?`,
+      [notifResult.insertId]
+    );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user_${userId}`).emit("newNotification", rows[0]);
+    } else {
+      console.error("sendNotification: io is undefined/null — socket not attached to app");
+    }
+  } catch (notifErr) {
+    console.error("sendNotification failed (non-fatal):", notifErr.message);
+  }
+}
+
 export const payMultipleFines = async (req, res) => {
   const { fineIds, amountPaid } = req.body;
   const processedBy = req.user.id;
@@ -64,8 +92,6 @@ export const payMultipleFines = async (req, res) => {
       );
     }
 
-    const io = req.app.get("io");
-
     const [[{ totalUnpaid }]] = await db.query(
       `SELECT COALESCE(SUM(amount), 0) AS totalUnpaid
        FROM fines WHERE user_id = ? AND status = 'unpaid'`,
@@ -76,14 +102,12 @@ export const payMultipleFines = async (req, res) => {
       (changeAmount > 0 ? ` (paid ₱${paidAmount.toFixed(2)}, change: ₱${changeAmount.toFixed(2)}).` : ".") +
       (totalUnpaid > 0 ? ` You still have ₱${totalUnpaid} in unpaid fines.` : " You can now borrow books again.");
 
-    const [notifResult] = await db.query(
-      `INSERT INTO notifications (user_id, title, message, type)
-       VALUES (?, ?, ?, 'admin')`,
-      [userId, "Fines Paid — Receipt Available", message]
-    );
-
-    const [notifRows] = await db.query(`SELECT * FROM notifications WHERE id = ?`, [notifResult.insertId]);
-    if (io) io.to(`user_${userId}`).emit("newNotification", notifRows[0]);
+    // Fine payment is already committed at this point — notification is best-effort.
+    await sendNotification(req, {
+      userId,
+      title: "Fines Paid — Receipt Available",
+      message,
+    });
 
     res.json({
       message: "Fines paid successfully",
@@ -142,6 +166,7 @@ export const getGroupReceiptData = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch group receipt" });
   }
 };
+
 export const getUserFines = async (req, res) => {
   const { userId } = req.params;
 
@@ -270,24 +295,19 @@ export const payFine = async (req, res) => {
   const { amountPaid } = req.body;
   const processedBy = req.user.id;
 
-  console.log("=== payFine START ===", { fineId, amountPaid, processedBy });
-
   try {
     const [[fine]] = await db.query(
       `SELECT * FROM fines WHERE id = ?`,
       [fineId]
     );
-    console.log("Step 1: fetched fine", fine);
 
     if (!fine) return res.status(404).json({ message: "Fine not found" });
     if (fine.status !== "unpaid") {
-      console.log("Step 1b: fine already resolved", fine.status);
       return res.status(400).json({ message: "Fine is already resolved" });
     }
 
     const paidAmount = Number(amountPaid) || fine.amount;
     const changeAmount = Math.max(0, paidAmount - fine.amount);
-    console.log("Step 2: computed amounts", { paidAmount, changeAmount });
 
     await db.query(
       `UPDATE fines 
@@ -299,56 +319,36 @@ export const payFine = async (req, res) => {
        WHERE id = ?`,
       [processedBy, paidAmount, changeAmount, fineId]
     );
-    console.log("Step 3: fine UPDATE succeeded");
-
-    const io = req.app.get("io");
-    console.log("Step 4: got io object?", !!io, typeof io?.to);
 
     const [[{ totalUnpaid }]] = await db.query(
       `SELECT COALESCE(SUM(amount), 0) AS totalUnpaid
        FROM fines WHERE user_id = ? AND status = 'unpaid'`,
       [fine.user_id]
     );
-    console.log("Step 5: totalUnpaid", totalUnpaid);
 
     const message = totalUnpaid > 0
       ? `Your ₱${fine.amount} fine has been marked as paid. You still have ₱${totalUnpaid} in unpaid fines.`
       : `Your ₱${fine.amount} fine has been paid. You can now borrow books again.`;
 
-    const [notifResult] = await db.query(
-      `INSERT INTO notifications (user_id, title, message, type)
-       VALUES (?, ?, ?, 'admin')`,
-      [fine.user_id, "Fine Paid — Receipt Available", message]
-    );
-    console.log("Step 6: notification inserted", notifResult.insertId);
+    // Fine is already committed at this point — notification is best-effort.
+    await sendNotification(req, {
+      userId: fine.user_id,
+      title: "Fine Paid — Receipt Available",
+      message,
+    });
 
-    const [rows] = await db.query(
-      `SELECT * FROM notifications WHERE id = ?`,
-      [notifResult.insertId]
-    );
-    console.log("Step 7: fetched notification row", rows[0]);
-
-    if (!io) {
-      console.error("Step 8 SKIPPED: io is undefined/null — socket not attached to app");
-    } else {
-      io.to(`user_${fine.user_id}`).emit("newNotification", rows[0]);
-      console.log("Step 8: emitted newNotification to room", `user_${fine.user_id}`);
-    }
-
-    console.log("=== payFine SUCCESS, sending response ===");
-    res.json({ 
-      message: "Fine marked as paid", 
-      totalUnpaid, 
+    res.json({
+      message: "Fine marked as paid",
+      totalUnpaid,
       fineId: fine.id,
       changeAmount
     });
   } catch (err) {
-    console.error("=== payFine ERROR ===");
-    console.error("Message:", err.message);
-    console.error("Stack:", err.stack);
+    console.error("=== payFine ERROR ===", err.message);
     res.status(500).json({ message: "Failed to pay fine", error: err.message });
   }
 };
+
 export const waiveFine = async (req, res) => {
   const { fineId } = req.params;
   const processedBy = req.user.id;
@@ -371,8 +371,6 @@ export const waiveFine = async (req, res) => {
       [processedBy, fineId]
     );
 
-    const io = req.app.get("io");
-
     const [[{ totalUnpaid }]] = await db.query(
       `SELECT COALESCE(SUM(amount), 0) AS totalUnpaid
        FROM fines WHERE user_id = ? AND status = 'unpaid'`,
@@ -383,18 +381,12 @@ export const waiveFine = async (req, res) => {
       ? `Your ₱${fine.amount} fine has been waived. You still have ₱${totalUnpaid} in unpaid fines.`
       : `Your ₱${fine.amount} fine has been waived. You can now borrow books again.`;
 
-    const [notifResult] = await db.query(
-      `INSERT INTO notifications (user_id, title, message, type)
-       VALUES (?, ?, ?, 'admin')`,
-      [fine.user_id, "Fine Waived — Receipt Available", message]
-    );
-
-    const [rows] = await db.query(
-      `SELECT * FROM notifications WHERE id = ?`,
-      [notifResult.insertId]
-    );
-
-    io.to(`user_${fine.user_id}`).emit("newNotification", rows[0]);
+    // Fine is already committed at this point — notification is best-effort.
+    await sendNotification(req, {
+      userId: fine.user_id,
+      title: "Fine Waived — Receipt Available",
+      message,
+    });
 
     res.json({ message: "Fine waived", totalUnpaid, fineId: fine.id });
   } catch (err) {
@@ -422,8 +414,6 @@ export const addManualFine = async (req, res) => {
       [userId, borrow_id || null, amount, fine_type, notes || null]
     );
 
-    const io = req.app.get("io");
-
     const [[{ totalUnpaid }]] = await db.query(
       `SELECT COALESCE(SUM(amount), 0) AS totalUnpaid
        FROM fines WHERE user_id = ? AND status = 'unpaid'`,
@@ -432,22 +422,12 @@ export const addManualFine = async (req, res) => {
 
     const typeLabel = fine_type.charAt(0).toUpperCase() + fine_type.slice(1);
 
-    const [notifResult] = await db.query(
-      `INSERT INTO notifications (user_id, title, message, type)
-       VALUES (?, ?, ?, 'admin')`,
-      [
-        userId,
-        `${typeLabel} Fine Added`,
-        `A ₱${amount} ${fine_type} fine has been added to your account${notes ? `: ${notes}` : ""}. Your total unpaid balance is ₱${totalUnpaid}. You cannot borrow books until your fine is paid.`
-      ]
-    );
-
-    const [rows] = await db.query(
-      `SELECT * FROM notifications WHERE id = ?`,
-      [notifResult.insertId]
-    );
-
-    io.to(`user_${userId}`).emit("newNotification", rows[0]);
+    // Fine is already committed at this point — notification is best-effort.
+    await sendNotification(req, {
+      userId,
+      title: `${typeLabel} Fine Added`,
+      message: `A ₱${amount} ${fine_type} fine has been added to your account${notes ? `: ${notes}` : ""}. Your total unpaid balance is ₱${totalUnpaid}. You cannot borrow books until your fine is paid.`,
+    });
 
     res.status(201).json({
       message: "Fine added successfully",

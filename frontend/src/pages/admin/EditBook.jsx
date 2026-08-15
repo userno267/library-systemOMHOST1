@@ -172,8 +172,11 @@ export default function EditBook() {
     }
   };
 
-  // ── Derived cover display: prefer new local preview, else existing server cover
-  const coverSrc = coverPreview || (existingCover ? `${API}${existingCover}` : null);
+  // Guard: if the server already returns a full URL, do not prepend API again
+  const resolvedCover = existingCover
+    ? existingCover.startsWith("http") ? existingCover : `${API}${existingCover}`
+    : null;
+  const coverSrc = coverPreview || resolvedCover;
 
   return (
     <>

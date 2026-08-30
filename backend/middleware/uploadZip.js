@@ -1,9 +1,10 @@
 import multer from "multer";
 import path from "path";
+import os from "os";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "public/uploads/zips");
+    cb(null, os.tmpdir()); // Render always allows writes to /tmp
   },
   filename: (req, file, cb) => {
     const uniqueName =

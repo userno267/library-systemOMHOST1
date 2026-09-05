@@ -10,6 +10,7 @@ export default function Register() {
     full_name: "",
     lrn: "",
     email: "",
+    phone: "",
     password: "",
   });
 
@@ -40,8 +41,6 @@ export default function Register() {
         return;
       }
 
-      // Registration creates an unverified account and emails a code —
-      // send them straight to the verification screen.
       navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
     } catch (err) {
       console.error(err);
@@ -54,7 +53,6 @@ export default function Register() {
   return (
     <div className="auth-container">
 
-      {/* ================= LEFT (DESKTOP) ================= */}
       <div className="left-panel">
         <div className="branding">
           <img src="/278737963_102029019168954_7338134888722766049_n.jpg" alt="School Logo" />
@@ -63,11 +61,9 @@ export default function Register() {
         </div>
       </div>
 
-      {/* ================= RIGHT ================= */}
       <div className="right-panel">
         <div className="auth-card">
 
-          {/* MOBILE LOGO */}
           <div className="mobile-logo">
             <img src="/278737963_102029019168954_7338134888722766049_n.jpg" alt="Logo" />
           </div>
@@ -104,6 +100,17 @@ export default function Register() {
             />
 
             <input
+              type="tel"
+              name="phone"
+              placeholder="Phone Number"
+              value={form.phone}
+              onChange={handleChange}
+              pattern="[0-9+\-\s]{7,15}"
+              title="Enter a valid phone number"
+              required
+            />
+
+            <input
               type={showPassword ? "text" : "password"}
               name="password"
               placeholder="Password"
@@ -112,7 +119,6 @@ export default function Register() {
               required
             />
 
-            {/* SHOW PASSWORD */}
             <div className="show-password">
               <input
                 type="checkbox"
@@ -141,7 +147,6 @@ export default function Register() {
           font-family: "Poppins", sans-serif;
         }
 
-        /* ================= LEFT ================= */
         .left-panel {
           flex: 1;
           background: linear-gradient(135deg, #2e7d32, #a5d6a7);
@@ -167,7 +172,6 @@ export default function Register() {
           margin-bottom: 10px;
         }
 
-        /* ================= RIGHT ================= */
         .right-panel {
           flex: 1;
           display: flex;
@@ -198,6 +202,7 @@ export default function Register() {
 
         input[type="text"],
         input[type="email"],
+        input[type="tel"],
         input[type="password"] {
           width: 100%;
           padding: 12px;
@@ -253,7 +258,6 @@ export default function Register() {
           text-decoration: none;
         }
 
-        /* ================= MOBILE ================= */
         .mobile-logo {
           display: none;
         }

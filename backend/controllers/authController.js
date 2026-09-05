@@ -22,11 +22,10 @@ async function issueVerificationCode(email) {
 }
 
 // ─── Register ─────────────────────────────────────────────────────────────────
-
 export const register = async (req, res) => {
-  const { full_name, lrn, email, password } = req.body;
+  const { full_name, lrn, email, phone, password } = req.body;
 
-  if (!full_name || !lrn || !email || !password) {
+  if (!full_name || !lrn || !email || !phone || !password) {
     return res.status(400).json({
       success: false,
       message: "All fields are required"
@@ -37,8 +36,8 @@ export const register = async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
 
     await db.query(
-      "INSERT INTO users (full_name, lrn, email, password, is_verified) VALUES (?, ?, ?, ?, 0)",
-      [full_name, lrn, email, hashed]
+      "INSERT INTO users (full_name, lrn, email, phone, password, is_verified) VALUES (?, ?, ?, ?, ?, 0)",
+      [full_name, lrn, email, phone, hashed]
     );
 
     const code = await issueVerificationCode(email);

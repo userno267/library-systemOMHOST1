@@ -92,13 +92,17 @@ export default function AdminUserDetail() {
     fetch_();
   }, [id, token, baseURL]);
 
-  const handleDownloadQR = () => {
-    if (!qrDataUrl) return;
-    const a = document.createElement("a");
-    a.href = qrDataUrl;
-    a.download = `user-qr-${user?.full_name?.replace(/\s+/g, "-") || id}.png`;
-    a.click();
-  };
+const handleDownloadQR = () => {
+  if (!qrDataUrl) return;
+  const a = document.createElement("a");
+  a.href = qrDataUrl;
+  // Filename is just the student's name (sanitized for filesystem safety)
+  const safeName = (user?.full_name || `student-${id}`)
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, ""); // strip characters invalid in filenames
+  a.download = `${safeName}.png`;
+  a.click();
+};
 
   if (loading) return (
     <>

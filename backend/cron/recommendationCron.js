@@ -19,6 +19,8 @@ async function runRecommenderForUser(userId) {
     throw new Error("ML_SERVICE_URL not configured");
   }
 
+  console.log(`[RecommendationCron] 🌐 Calling ML service for user ${userId}...`);
+
   const res = await fetch(`${ML_SERVICE_URL}/recommend/${userId}?top_n=10`, {
     method: "GET",
     signal: AbortSignal.timeout(20000),
@@ -26,11 +28,14 @@ async function runRecommenderForUser(userId) {
 
   if (!res.ok) {
     const text = await res.text();
+    console.error(`[RecommendationCron] ❌ ML service error for user ${userId}: ${res.status} — ${text.slice(0, 200)}`);
     throw new Error(`ML service returned ${res.status}: ${text.slice(0, 200)}`);
   }
 
   const data = await res.json();
   const recommendations = data.recommendations || [];
+
+  console.log(`[RecommendationCron] ✅ ML service returned ${recommendations.length} recs for user ${userId}`);
 
   if (!recommendations.length) {
     return { userId, count: 0 };
@@ -54,6 +59,8 @@ async function runRecommenderForUser(userId) {
        computed_at = VALUES(computed_at)`,
     [values]
   );
+
+  console.log(`[RecommendationCron] 💾 Cached ${recommendations.length} recs for user ${userId}`);
 
   return { userId, count: recommendations.length };
 }
@@ -140,32 +147,61 @@ async function wasRecentlyRefreshed(userId) {
      LIMIT 1`,
     [userId, REFRESH_DEBOUNCE_MINUTES]
   );
-  return rows.length > 0;
+
+  const fresh = rows.length > 0;
+  console.log(`[RecommendationCron] 🔍 Cache freshness check for user ${userId}: ${fresh ? "FRESH (skip)" : "STALE (proceed)"}`);
+  return fresh;
 }
+
+// ─── In-flight lock: one Promise per user so concurrent callers share one HTTP call ──
+
+const inFlightRefresh = new Map(); // userId -> Promise
 
 // ─── Single-user refresh (call after borrow / return, or on login) ──────────
 
 export async function refreshForUser(userId) {
-  if (!ML_SERVICE_URL) return;
-
-  try {
-    if (await wasRecentlyRefreshed(userId)) {
-      console.log(
-        `[RecommendationCron] Skipping refresh for user ${userId} — cache is fresh (< ${REFRESH_DEBOUNCE_MINUTES}m old)`
-      );
-      return;
-    }
-
-    const result = await runRecommenderForUser(userId);
-    console.log(
-      `[RecommendationCron] Refreshed ${result.count} recs for user ${userId}`
-    );
-  } catch (err) {
-    console.error(
-      `[RecommendationCron] Failed to refresh user ${userId}:`,
-      err.message
-    );
+  if (!ML_SERVICE_URL) {
+    console.warn(`[RecommendationCron] ⚠️ ML_SERVICE_URL not set — skipping refresh for user ${userId}`);
+    return;
   }
+
+  // If there's already a refresh running for this user, piggyback on it
+  // instead of firing a second request to the ML service.
+  if (inFlightRefresh.has(userId)) {
+    console.log(
+      `[RecommendationCron] 🔒 Refresh already in-flight for user ${userId} — returning existing promise instead of making a duplicate ML call`
+    );
+    return inFlightRefresh.get(userId);
+  }
+
+  console.log(`[RecommendationCron] 🚀 Starting refresh for user ${userId}...`);
+
+  const promise = (async () => {
+    try {
+      if (await wasRecentlyRefreshed(userId)) {
+        console.log(
+          `[RecommendationCron] ⏭️  Skipping refresh for user ${userId} — cache is fresh (< ${REFRESH_DEBOUNCE_MINUTES}m old)`
+        );
+        return;
+      }
+
+      const result = await runRecommenderForUser(userId);
+      console.log(
+        `[RecommendationCron] ✅ Refresh complete for user ${userId} — ${result.count} recs cached`
+      );
+    } catch (err) {
+      console.error(
+        `[RecommendationCron] ❌ Failed to refresh user ${userId}:`,
+        err.message
+      );
+    } finally {
+      inFlightRefresh.delete(userId);
+      console.log(`[RecommendationCron] 🔓 Lock released for user ${userId}`);
+    }
+  })();
+
+  inFlightRefresh.set(userId, promise);
+  return promise;
 }
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ cron.schedule("0 2 * * *", async () => {
     const [users] = await db.query(
       `SELECT id FROM users
        WHERE role = 'student'
-       AND created_at <= NOW() - INTERVAL 3 YEAR`
+       AND created_at <= NOW() - INTERVAL 10 YEAR`
     );
 
     const userIds = users.map(u => u.id);

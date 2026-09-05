@@ -3,11 +3,31 @@ import db from "../db/db.js";
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL;
 
+// ─── Global rate-limit queue ──────────────────────────────────────────────────
+// Render free tier rejects concurrent requests with 429.
+// This queue ensures all ML calls — from cron, login, and the controller —
+// go out one at a time with a gap between them.
+
+const ML_CALL_INTERVAL_MS = 2000; // min ms between ML HTTP calls
+let mlCallQueue = Promise.resolve();  // chain all calls onto this
+
+function queueMLCall(fn) {
+  const next = mlCallQueue.then(
+    () => new Promise((resolve) => setTimeout(resolve, ML_CALL_INTERVAL_MS))
+  ).then(fn);
+
+  // The queue only tracks the chain, not individual results.
+  // Swallow errors here so a failed call doesn't break the chain.
+  mlCallQueue = next.catch(() => {});
+
+  return next;
+}
+
 // ─── Map recommender.py's "type" field to DB enum values ─────────────────────
 
 function mapType(type) {
-  if (type === "content-tfidf")   return "content";
-  if (type === "tfidf-fallback")  return "fallback";
+  if (type === "content-tfidf")    return "content";
+  if (type === "tfidf-fallback")   return "fallback";
   if (type === "collaborative-ml") return "collaborative";
   return "popular";
 }
@@ -96,32 +116,19 @@ async function refreshAllRecommendations() {
     return;
   }
 
-  console.log(`[RecommendationCron] Refreshing ${users.length} users...`);
+  console.log(`[RecommendationCron] Refreshing ${users.length} users sequentially (rate-limited)...`);
 
   let success = 0;
   let failed = 0;
 
-  const BATCH_SIZE = 5;
-  for (let i = 0; i < users.length; i += BATCH_SIZE) {
-    const batch = users.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map((u) => runRecommenderForUser(u.id))
-    );
-
-    results.forEach((r, idx) => {
-      if (r.status === "fulfilled") {
-        success++;
-      } else {
-        failed++;
-        console.error(
-          `[RecommendationCron] Failed for user ${batch[idx].id}:`,
-          r.reason?.message
-        );
-      }
-    });
-
-    if (i + BATCH_SIZE < users.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  // Sequential — one user at a time through the queue, no concurrent ML calls
+  for (const user of users) {
+    try {
+      await queueMLCall(() => runRecommenderForUser(user.id));
+      success++;
+    } catch (err) {
+      failed++;
+      console.error(`[RecommendationCron] Failed for user ${user.id}:`, err.message);
     }
   }
 
@@ -137,7 +144,7 @@ async function refreshAllRecommendations() {
 
 // ─── Debounce: skip refresh if this user's cache is still fresh ─────────────
 
-const REFRESH_DEBOUNCE_MINUTES = 15;
+const REFRESH_DEBOUNCE_MINUTES = 30; // raised from 15 to reduce ML calls further
 
 async function wasRecentlyRefreshed(userId) {
   const [rows] = await db.query(
@@ -153,9 +160,9 @@ async function wasRecentlyRefreshed(userId) {
   return fresh;
 }
 
-// ─── In-flight lock: one Promise per user so concurrent callers share one HTTP call ──
+// ─── In-flight lock: one Promise per user so concurrent callers share one call ─
 
-const inFlightRefresh = new Map(); // userId -> Promise
+const inFlightRefresh = new Map();
 
 // ─── Single-user refresh (call after borrow / return, or on login) ──────────
 
@@ -165,11 +172,9 @@ export async function refreshForUser(userId) {
     return;
   }
 
-  // If there's already a refresh running for this user, piggyback on it
-  // instead of firing a second request to the ML service.
   if (inFlightRefresh.has(userId)) {
     console.log(
-      `[RecommendationCron] 🔒 Refresh already in-flight for user ${userId} — returning existing promise instead of making a duplicate ML call`
+      `[RecommendationCron] 🔒 Refresh already in-flight for user ${userId} — returning existing promise`
     );
     return inFlightRefresh.get(userId);
   }
@@ -185,10 +190,9 @@ export async function refreshForUser(userId) {
         return;
       }
 
-      const result = await runRecommenderForUser(userId);
-      console.log(
-        `[RecommendationCron] ✅ Refresh complete for user ${userId} — ${result.count} recs cached`
-      );
+      // Go through the shared queue so this doesn't fire on top of a batch
+      await queueMLCall(() => runRecommenderForUser(userId));
+      console.log(`[RecommendationCron] ✅ Refresh complete for user ${userId}`);
     } catch (err) {
       console.error(
         `[RecommendationCron] ❌ Failed to refresh user ${userId}:`,
@@ -213,8 +217,11 @@ export function startRecommendationCron() {
 
   console.log("[RecommendationCron] Scheduled — runs every 6 hours (Asia/Manila).");
 
+  // Delay startup warm-up longer so the server is fully ready,
+  // and so any login-triggered refreshes that happen right at boot
+  // don't collide with the batch.
   setTimeout(() => {
     console.log("[RecommendationCron] Running startup warm-up...");
     refreshAllRecommendations();
-  }, 30_000);
+  }, 60_000); // was 30s, now 60s
 }

@@ -83,7 +83,7 @@ export const getRecommendations = async (req, res) => {
   console.log(`[Recommendations] 📥 Request from user ${userId}`);
 
   try {
-    // 1️⃣  Cache hit — instant
+    // 1️⃣  Cache hit — instant, no ML call needed
     const cached = await getCachedRecommendations(userId);
     console.log(`[Recommendations] 🗄️  Cache check for user ${userId}: ${cached.length} rows found`);
 
@@ -96,14 +96,11 @@ export const getRecommendations = async (req, res) => {
       });
     }
 
-    // 2️⃣  Cache miss — wait briefly in case login's background refreshForUser
-    //     is already in-flight and will populate the cache for us.
-    //     The in-flight lock in recommendationCron.js ensures only one ML call
-    //     goes out even if both code paths reach the ML service simultaneously.
-    console.log(`[Recommendations] ⏳ Cache miss for user ${userId} — waiting 2s in case background refresh is in-flight...`);
-    await new Promise((r) => setTimeout(r, 2000));
+    // 2️⃣  Cache miss — wait to see if login's background refreshForUser
+    //     is already in the queue and will populate cache before we need to call live.
+    console.log(`[Recommendations] ⏳ Cache miss for user ${userId} — waiting 3s for any in-flight refresh...`);
+    await new Promise((r) => setTimeout(r, 3000));
 
-    // Re-check cache after the wait
     const cachedAfterWait = await getCachedRecommendations(userId);
     console.log(`[Recommendations] 🗄️  Cache re-check after wait for user ${userId}: ${cachedAfterWait.length} rows found`);
 
@@ -116,29 +113,16 @@ export const getRecommendations = async (req, res) => {
       });
     }
 
-    // 3️⃣  Still nothing — call ML service directly.
-    //     The in-flight lock in refreshForUser will deduplicate this with any
-    //     concurrent background refresh, so only one HTTP request goes out.
-    console.log(`[Recommendations] 🔄 Still no cache — calling ML service directly for user ${userId}...`);
+    // 3️⃣  Still nothing in cache — trigger a background refresh through the
+    //     shared queue (rate-limited, deduplicated) and serve popular fallback
+    //     immediately so the user isn't staring at a spinner.
+    //     Next page load will hit cache instead.
+    console.warn(`[Recommendations] ⚠️ No cache after wait for user ${userId} — serving popular fallback and triggering background refresh`);
 
-    let live = [];
-    try {
-      live = await getLiveFallback(userId);
-    } catch (mlErr) {
-      console.error(`[Recommendations] ❌ Live ML call failed for user ${userId}:`, mlErr.message);
-    }
-
-    if (live.length > 0) {
-      console.log(`[Recommendations] ✅ Serving live ML results for user ${userId} (${live.length} recs) — seeding cache in background`);
-      // Seed cache for next request — fire and forget, don't await
-      refreshForUser(userId).catch((err) =>
-        console.error(`[Recommendations] ⚠️ Background cache seed failed for user ${userId}:`, err.message)
-      );
-      return res.json({ recommendations: live, source: "live" });
-    }
-
-    // 4️⃣  Hard fallback — most borrowed books, zero ML
-    console.warn(`[Recommendations] ⚠️ ML unavailable for user ${userId} — falling back to popular books`);
+    // Fire background refresh without awaiting — goes through the rate-limit queue
+    refreshForUser(userId).catch((err) =>
+      console.error(`[Recommendations] ⚠️ Background refresh trigger failed for user ${userId}:`, err.message)
+    );
 
     const [popular] = await db.query(
       `SELECT
@@ -166,7 +150,7 @@ export const getRecommendations = async (req, res) => {
   }
 };
 
-// ─── Similar books (book detail page) — unchanged, no ML/Python involved ─────
+// ─── Similar books (book detail page) ────────────────────────────────────────
 
 const SIMILAR_LIMIT = 5;
 const SIMILAR_FROM_CACHE = 2;

@@ -1,19 +1,19 @@
-
-
-
 import AdmZip from "adm-zip";
 import xlsx from "xlsx";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+import crypto from "crypto";
 import QRCode from "qrcode";
 import db from "../db/db.js";
-import { v2 as cloudinary } from "cloudinary";
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// backend/public/uploads/covers
+const COVERS_DIR = path.join(__dirname, "..", "public", "uploads", "covers");
+fs.mkdirSync(COVERS_DIR, { recursive: true });
+
 /* ================= HELPERS ================= */
 
 const normalize = (str = "") =>
@@ -101,6 +101,23 @@ const findBestImage = (images, title, isbn) => {
   }
 
   return null;
+};
+
+/* ═════════════════════════════════════════════
+   LOCAL STORAGE — copy matched cover into
+   backend/public/uploads/covers with a unique
+   filename, return the relative "/uploads/..."
+   path to store in the DB (same convention the
+   single/edit book upload flow uses).
+═════════════════════════════════════════════ */
+const saveCoverLocally = (sourcePath) => {
+  const ext = path.extname(sourcePath).toLowerCase();
+  const uniqueName = `${crypto.randomBytes(16).toString("hex")}${ext}`;
+  const destPath = path.join(COVERS_DIR, uniqueName);
+
+  fs.copyFileSync(sourcePath, destPath);
+
+  return `/uploads/covers/${uniqueName}`;
 };
 
 /* ═════════════════════════════════════════════
@@ -197,13 +214,9 @@ export const uploadBooksZip = async (req, res) => {
         let coverPath = null;
 
         if (imagePath) {
-         const uploadResult = await cloudinary.uploader.upload(imagePath, {
-  folder: "library/covers",
-  resource_type: "image",
-});
-coverPath = uploadResult.secure_url;
-lastCover = imagePath;
-console.log("🖼️ uploaded to cloudinary:", coverPath);
+          coverPath = saveCoverLocally(imagePath);
+          lastCover = imagePath;
+          console.log("🖼️ saved locally:", coverPath);
         }
 
         /* ===== LOGIC ===== */

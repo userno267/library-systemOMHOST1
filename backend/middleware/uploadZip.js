@@ -4,7 +4,7 @@ import os from "os";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, os.tmpdir()); // Render always allows writes to /tmp
+    cb(null, os.tmpdir()); // temp scratch space; bookBulkController.js deletes the extracted files + zip after processing
   },
   filename: (req, file, cb) => {
     const uniqueName =

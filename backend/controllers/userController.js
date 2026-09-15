@@ -1,5 +1,6 @@
 import pool from "../db/db.js";
 import bcrypt from "bcrypt";
+import { toPublicPath } from "../middleware/upload.js";
 
 // ==============================
 // LIST USERS (with search & pagination)
@@ -166,7 +167,9 @@ export const deleteUser = async (req, res) => {
     console.error("DELETE USER ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
-};export const updateProfile = async (req, res) => {
+};
+
+export const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     const { name, phone, bio } = req.body;
@@ -174,7 +177,7 @@ export const deleteUser = async (req, res) => {
     let profileImagePath = null;
 
     if (req.file) {
-      profileImagePath = req.file.path;
+      profileImagePath = toPublicPath(req.file);
     }
 
     await pool.query(   // ✅ CHANGE db -> pool
@@ -215,7 +218,9 @@ export const getProfile = async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to load profile" });
   }
-};export const bulkDeleteUsers = async (req, res) => {
+};
+
+export const bulkDeleteUsers = async (req, res) => {
   try {
     const { ids } = req.body;
 

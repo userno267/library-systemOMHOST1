@@ -42,14 +42,13 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://187.77.145.142",
   "https://fugitively-untruthful-madalynn.ngrok-free.dev",
   "https://unprogressively-noncognitive-karis.ngrok-free.dev",
   "https://seclusion-stitch-shy.ngrok-free.dev",
 ];
 
-// Allow any deployment/preview URL for this specific Vercel project while
-// iterating on hosting setup (project slug stays constant, the random
-// suffix changes per-deployment).
+
 const isAllowedOrigin = (origin) => {
   if (!origin) return true; // mobile apps / postman / server-to-server
   if (allowedOrigins.includes(origin)) return true;
@@ -89,6 +88,10 @@ import fs from "fs";
 app.use(
   "/uploads/profile",
   express.static(path.join(__dirname, "public/uploads/profile"))
+);
+app.use(
+  "/uploads/books",
+  express.static(path.join(__dirname, "public/uploads/books"))
 );
 app.get("/api/proxy-image", (req, res) => {
   try {

@@ -99,7 +99,9 @@ print("[Data] Text cleaning done ✅")
 # ===============================
 print("[TF-IDF] Fitting TF-IDF vectorizer...")
 
-tfidf = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=2)
+effective_min_df = 2 if len(df) >= 2 else 1
+
+tfidf = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=effective_min_df)
 tfidf_matrix = tfidf.fit_transform(df["combined_text"])
 
 print(f"[TF-IDF] Matrix shape: {tfidf_matrix.shape} (books x features) ✅")

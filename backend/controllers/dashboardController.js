@@ -363,7 +363,7 @@ Top books by heat: ${JSON.stringify(bookHeat?.slice(0,3)?.map(b => ({ title: b.t
 Rules: subjectInsights max 3, hotBooks max 3, recommendations max 3.`;
 
       const response = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: "openai/gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.2,
         max_completion_tokens: 600

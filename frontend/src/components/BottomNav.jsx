@@ -5,11 +5,9 @@ import socket from "../socket";
 import { AuthContext } from "../context/AuthContext";
 import { requestNotificationPermission, showBrowserNotification } from "../utils/browserNotifications";
 
-// =====================================================
-// Simple event bus so NotificationsPage can tell
-// BottomNav to re-fetch the unread count after reads
-// without prop drilling or a global state library
-// =====================================================
+// Keep in sync with Sidebar.jsx's DESKTOP_BREAKPOINT — above this width
+// the persistent sidebar covers navigation, so the bottom bar hides itself
+// via CSS (not unmounted, so its socket-driven badge state doesn't reset).
 export const notificationBus = {
   _listeners: [],
   on(fn) { this._listeners.push(fn); },
@@ -27,11 +25,6 @@ export default function BottomNav() {
 
   const handleScanClick = () => navigate("/scan");
 
-  /* ==============================
-     FETCH REAL UNREAD COUNT
-     Called on mount + whenever
-     NotificationsPage marks reads
-  ============================== */
   const fetchUnread = async () => {
     if (!user || !token) return;
     try {
@@ -50,38 +43,21 @@ export default function BottomNav() {
     }
   };
 
-  // Initial fetch
   useEffect(() => {
     if (user && token) fetchUnread();
   }, [user?.id, token]);
 
-  /* ==============================
-     LISTEN TO NOTIFICATION BUS
-     NotificationsPage calls
-     notificationBus.emit() after
-     marking read — we re-fetch here
-  ============================== */
   useEffect(() => {
     notificationBus.on(fetchUnread);
     return () => notificationBus.off(fetchUnread);
   }, [user?.id, token]);
 
-  /* ==============================
-     BROWSER NOTIFICATION PERMISSION
-     Ask once per logged-in session.
-     No-op if already granted/denied.
-  ============================== */
   useEffect(() => {
     if (user && token) {
       requestNotificationPermission();
     }
   }, [user?.id, token]);
 
-  /* ==============================
-     SOCKET — increment on new
-     notification arriving + show
-     a native browser popup
-  ============================== */
   useEffect(() => {
     if (!user?.id || !token) return;
 
@@ -90,11 +66,6 @@ export default function BottomNav() {
 
     const handleConnect = () => socket.emit("join", user.id);
 
-    // This is the ONE place we trigger the browser popup — BottomNav is
-    // mounted on every page, so this fires exactly once per notification
-    // regardless of which page the user is currently on. Do not also call
-    // showBrowserNotification from NotificationsPage.jsx, or users sitting
-    // on that page would get duplicate popups for the same notification.
     const handleNewNotification = (data) => {
       setUnreadCount((prev) => prev + 1);
       showBrowserNotification(data);
@@ -109,9 +80,6 @@ export default function BottomNav() {
     };
   }, [user?.id, token]);
 
-  /* ==============================
-     NAV ITEMS
-  ============================== */
   const navItems = [
     { type: "link", href: "/home", icon: <FaHome />, label: "Home" },
     { type: "link", href: "/Profile", icon: <FaUser />, label: "Profile" },
@@ -131,32 +99,30 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="bottom-nav">
+    <nav className="bn-bottom-nav">
       {navItems.map((item, index) =>
         item.type === "link" ? (
           <Link
             key={index}
             to={item.href}
-            className={`nav-item ${location.pathname === item.href ? "active" : ""}`}
+            className={`bn-nav-item ${location.pathname === item.href ? "bn-active" : ""}`}
           >
-            <div className="icon-wrapper">
+            <div className="bn-icon-wrapper">
               {item.icon}
-              {item.badge > 0 && (
-                <span className="badge">{item.badge}</span>
-              )}
+              {item.badge > 0 && <span className="bn-badge">{item.badge}</span>}
             </div>
             <span>{item.label}</span>
           </Link>
         ) : (
-          <button key={index} onClick={item.onClick} className="nav-item">
-            <div className="icon-wrapper">{item.icon}</div>
+          <button key={index} onClick={item.onClick} className="bn-nav-item">
+            <div className="bn-icon-wrapper">{item.icon}</div>
             <span>{item.label}</span>
           </button>
         )
       )}
 
       <style jsx>{`
-        .bottom-nav {
+        .bn-bottom-nav {
           position: fixed;
           bottom: 0;
           left: 0;
@@ -165,7 +131,7 @@ export default function BottomNav() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: linear-gradient(90deg, #388e3c, #fdd835);
+          background: #14532D;
           box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.2);
           padding: 0 8px;
           padding-bottom: env(safe-area-inset-bottom);
@@ -173,13 +139,18 @@ export default function BottomNav() {
           overflow: visible;
         }
 
-        .nav-item {
+        /* Hide on tablet/desktop — persistent Sidebar covers nav there */
+        @media (min-width: 900px) {
+          .bn-bottom-nav { display: none; }
+        }
+
+        .bn-nav-item {
           flex: 1;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          color: white;
+          color: rgba(255,255,255,0.75);
           font-size: 0.75rem;
           background: none;
           border: none;
@@ -190,22 +161,19 @@ export default function BottomNav() {
           z-index: 1;
         }
 
-        .nav-item svg {
-          font-size: 1.4rem;
+        .bn-nav-item svg {
+          font-size: 1.3rem;
           margin-bottom: 3px;
           transition: transform 0.2s ease;
         }
 
-        .icon-wrapper {
-          position: relative;
-          overflow: visible;
-        }
+        .bn-icon-wrapper { position: relative; overflow: visible; }
 
-        .badge {
+        .bn-badge {
           position: absolute;
           top: -6px;
           right: -10px;
-          background: #ff1744;
+          background: #A13D2B;
           color: white;
           font-size: 0.6rem;
           padding: 2px 6px;
@@ -214,20 +182,17 @@ export default function BottomNav() {
           min-width: 18px;
           text-align: center;
           z-index: 100;
-          box-shadow: 0 0 0 2px white;
+          box-shadow: 0 0 0 2px #14532D;
         }
 
-        .nav-item.active {
-          color: #222;
+        .bn-nav-item.bn-active {
+          color: #B8860B;
           font-weight: 600;
           transform: translateY(-4px);
         }
 
-        .nav-item.active svg {
-          transform: scale(1.15);
-        }
-
-        .nav-item:hover { color: #222; }
+        .bn-nav-item.bn-active svg { transform: scale(1.12); }
+        .bn-nav-item:hover { color: #fff; }
       `}</style>
     </nav>
   );

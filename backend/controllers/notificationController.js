@@ -123,7 +123,7 @@ export const sendAdminNotification = async (req, res) => {
     for (const user of users) {
       const [result] = await db.query(
         `INSERT INTO notifications (user_id, title, message, type)
-         VALUES (?, ?, ?, 'admin')`,
+         VALUES (?, ?, ?, 'system')`,
         [user.id, title, message] // ✅ FIX HERE
       );
 

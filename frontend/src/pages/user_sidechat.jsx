@@ -138,12 +138,9 @@ export default function UserChat() {
 
           <div className="messages">
             {messages.map((msg, idx) => {
-              const isStudent = msg.sender === "student";
+const isStudent = msg.sender === "student";
               return (
-                <div
-                  key={msg.id ?? `${msg.created_at}-${idx}`}
-                  className={`message ${isStudent ? "sender" : "receiver"}`}
-                >
+                <div className={`message ${isStudent ? "sender" : "receiver"}`}>
                   <div className="bubble">{msg.message}</div>
                   <div className="timestamp">{new Date(msg.created_at).toLocaleTimeString()}</div>
                 </div>
@@ -190,7 +187,6 @@ export default function UserChat() {
 
         .chat-window {
           flex: 1;
-          min-height: 0;
           background: #fff8e1;
           border-radius: 12px;
           padding: 12px;
@@ -205,7 +201,6 @@ export default function UserChat() {
           flex-direction: column;
           gap: 6px;
           flex: 1;
-          min-height: 0;
         }
 
         .message {

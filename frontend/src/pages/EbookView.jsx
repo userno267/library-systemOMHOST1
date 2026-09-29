@@ -8,6 +8,19 @@ import BottomNav from "../components/BottomNav";
 pdfjs.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js";
 
+const Icons = {
+  Prev: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  ),
+  Next: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  ),
+};
+
 export default function EbookView() {
   const { id } = useParams();
 
@@ -85,9 +98,24 @@ export default function EbookView() {
 
   if (!book) {
     return (
-      <div className="loading">
-        Loading book...
-      </div>
+      <>
+        <Sidebar />
+        <div className="ev-main">
+          <div className="ev-state">
+            <div className="ev-spinner" />
+            <span>Loading book…</span>
+          </div>
+        </div>
+        <BottomNav />
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+          :root { --forest: #14532D; --parchment: #FAF6EE; --line: #E4DFD3; --ink-soft: #5C5546; }
+          .ev-main { padding: 80px 16px 100px; background: var(--parchment); min-height: 100vh; font-family: 'Inter', sans-serif; }
+          .ev-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 80px 0; color: var(--ink-soft); font-size: 0.88rem; }
+          .ev-spinner { width: 24px; height: 24px; border: 2.5px solid var(--line); border-top-color: var(--forest); border-radius: 50%; animation: ev-spin 0.7s linear infinite; }
+          @keyframes ev-spin { to { transform: rotate(360deg); } }
+        `}</style>
+      </>
     );
   }
 
@@ -108,32 +136,31 @@ export default function EbookView() {
 
   return (
     <>
-      {/* Sidebar (now controlled properly) */}
       <Sidebar />
 
-      <div className="page">
-        <div className="container">
+      <div className="ev-main">
+        <div className="ev-container">
 
           {/* BOOK INFO */}
-          <div className="ebook-card">
+          <div className="ev-card">
             <img
               src={coverUrl}
               alt={book.title}
-              className="cover"
+              className="ev-cover"
               onError={(e) => (e.target.src = "/placeholder-book.png")}
             />
 
-            <div className="info">
-              <h2>{book.title}</h2>
-              <p><strong>Author:</strong> {book.author}</p>
-              {book.section && <p><strong>Section:</strong> {book.section}</p>}
+            <div className="ev-info">
+              <h2 className="ev-book-title">{book.title}</h2>
+              <p className="ev-meta"><strong>Author:</strong> {book.author}</p>
+              {book.section && <p className="ev-meta"><strong>Section:</strong> {book.section}</p>}
               {book.description && (
-                <p className="desc">{book.description}</p>
+                <p className="ev-desc">{book.description}</p>
               )}
             </div>
 
             {/* PDF READER */}
-            <div className="reader">
+            <div className="ev-reader">
               <Document
                 file={pdfFile}
                 onLoadSuccess={onDocumentLoadSuccess}
@@ -153,7 +180,7 @@ export default function EbookView() {
                     already fetched/parsed them by the time the user clicks
                     Next — makes navigation feel instant. */}
                 {numPages && pageNumber + 1 <= numPages && (
-                  <div className="preload" aria-hidden="true">
+                  <div className="ev-preload" aria-hidden="true">
                     <Page
                       key={`preload-${pageNumber + 1}`}
                       pageNumber={pageNumber + 1}
@@ -164,7 +191,7 @@ export default function EbookView() {
                   </div>
                 )}
                 {numPages && pageNumber + 2 <= numPages && (
-                  <div className="preload" aria-hidden="true">
+                  <div className="ev-preload" aria-hidden="true">
                     <Page
                       key={`preload-${pageNumber + 2}`}
                       pageNumber={pageNumber + 2}
@@ -179,15 +206,16 @@ export default function EbookView() {
 
             {/* PAGINATION */}
             {numPages > 1 && (
-              <div className="pagination">
+              <div className="ev-pagination">
                 <button
+                  className="ev-page-btn"
                   onClick={() => setPageNumber((p) => Math.max(p - 1, 1))}
                   disabled={pageNumber === 1}
                 >
-                  ◀ Prev
+                  <Icons.Prev /> Prev
                 </button>
 
-                <div className="page-jump">
+                <div className="ev-page-jump">
                   <span>Page</span>
                   <input
                     type="number"
@@ -204,12 +232,13 @@ export default function EbookView() {
                 </div>
 
                 <button
+                  className="ev-page-btn"
                   onClick={() =>
                     setPageNumber((p) => Math.min(p + 1, numPages))
                   }
                   disabled={pageNumber === numPages}
                 >
-                  Next ▶
+                  Next <Icons.Next />
                 </button>
               </div>
             )}
@@ -219,63 +248,80 @@ export default function EbookView() {
 
       <BottomNav />
 
-      {/* ================= STYLE ================= */}
-      <style jsx>{`
-        .page {
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+        :root {
+          --forest:    #14532D;
+          --forest-lt: #3E7A4D;
+          --gold:      #B8860B;
+          --parchment: #FAF6EE;
+          --sage:      #EEF3E7;
+          --ink:       #241F18;
+          --ink-soft:  #5C5546;
+          --line:      #E4DFD3;
+        }
+
+        .ev-main {
           padding: 80px 16px 100px;
-          background: #f9fbe7;
+          background: var(--parchment);
           min-height: 100vh;
-          font-family: "Poppins", sans-serif;
+          font-family: 'Inter', sans-serif;
+          color: var(--ink);
         }
 
         @media (max-width: 768px) {
-          .page {
-            margin-left: 0;
-          }
+          .ev-main { margin-left: 0; }
         }
 
-        .container {
+        .ev-container {
           max-width: 900px;
           margin: 0 auto;
         }
 
-        .ebook-card {
-          background: #fff;
-          padding: 16px;
-          border-radius: 14px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-
-        .cover {
-          width: 120px;
-          display: block;
-          margin: 0 auto 10px;
+        .ev-card {
+          background: white;
+          border: 1px solid var(--line);
+          padding: 18px;
           border-radius: 10px;
         }
 
-        .info {
+        .ev-cover {
+          width: 120px;
+          display: block;
+          margin: 0 auto 12px;
+          border-radius: 8px;
+          border: 1px solid var(--line);
+        }
+
+        .ev-info {
           text-align: center;
-          margin-bottom: 12px;
+          margin-bottom: 14px;
         }
 
-        h2 {
-          color: #2e7d32;
-          font-size: 1.2rem;
-          margin-bottom: 6px;
+        .ev-book-title {
+          font-family: 'Fraunces', serif;
+          color: var(--forest);
+          font-size: 1.15rem;
+          font-weight: 600;
+          margin: 0 0 6px;
         }
 
-        p {
+        .ev-meta {
           font-size: 0.85rem;
-          color: #444;
+          color: var(--ink-soft);
           margin: 2px 0;
         }
+        .ev-meta strong { color: var(--ink); }
 
-        .desc {
-          margin-top: 6px;
+        .ev-desc {
+          margin-top: 8px;
           font-size: 0.8rem;
+          color: var(--ink-soft);
+          line-height: 1.5;
         }
 
-        .reader {
+        .ev-reader {
           display: flex;
           justify-content: center;
           margin-top: 10px;
@@ -283,10 +329,11 @@ export default function EbookView() {
         }
 
         canvas {
-          border-radius: 8px;
+          border-radius: 6px;
+          box-shadow: 0 2px 10px rgba(36,31,24,0.08);
         }
 
-        .preload {
+        .ev-preload {
           position: absolute;
           top: 0;
           left: -99999px;
@@ -297,53 +344,56 @@ export default function EbookView() {
           pointer-events: none;
         }
 
-        .pagination {
+        .ev-pagination {
           display: flex;
           justify-content: center;
           align-items: center;
           gap: 12px;
-          margin-top: 14px;
+          margin-top: 16px;
         }
 
-        .pagination button {
-          padding: 6px 12px;
-          border: none;
-          border-radius: 8px;
-          background: #2e7d32;
-          color: white;
+        .ev-page-btn {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 7px 14px;
+          border: 1px solid var(--line);
+          border-radius: 6px;
+          background: white;
+          color: var(--forest);
+          font-weight: 600;
+          font-size: 0.82rem;
           cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          transition: background 0.12s, border-color 0.12s;
         }
+        .ev-page-btn:hover:not(:disabled) { background: var(--sage); border-color: var(--forest); }
+        .ev-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .pagination button:disabled {
-          background: #ccc;
-        }
-
-        .page-jump {
+        .ev-page-jump {
           display: flex;
           align-items: center;
           gap: 6px;
-          font-size: 0.85rem;
-          color: #444;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.82rem;
+          color: var(--ink-soft);
         }
 
-        .page-jump input {
+        .ev-page-jump input {
           width: 52px;
           text-align: center;
-          padding: 4px 6px;
-          border: 1px solid #ccc;
-          border-radius: 6px;
-          font-size: 0.85rem;
-        }
-
-        .page-jump input:focus {
+          padding: 5px 6px;
+          border: 1px solid var(--line);
+          border-radius: 5px;
+          font-size: 0.82rem;
+          font-family: 'IBM Plex Mono', monospace;
+          color: var(--ink);
           outline: none;
-          border-color: #2e7d32;
+          transition: border-color 0.15s;
         }
 
-        .loading {
-          padding: 80px;
-          text-align: center;
-          color: #666;
+        .ev-page-jump input:focus {
+          border-color: var(--forest);
         }
       `}</style>
     </>

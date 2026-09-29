@@ -121,7 +121,7 @@ export default function Sidebar() {
             </svg>
           </div>
           <div className="sb-brand-text">
-            <span className="sb-brand-name">LibPortal</span>
+            <span className="sb-brand-name">LIBROTECH</span>
             <span className="sb-brand-role">
               {isAdmin ? "Admin · Student View" : "Student"}
             </span>

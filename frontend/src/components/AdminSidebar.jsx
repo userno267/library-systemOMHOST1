@@ -118,8 +118,8 @@ export default function AdminSidebar() {
             </svg>
           </div>
           <div className="brand-text">
-            <span className="brand-name">LibPortal</span>
-            <span className="brand-role">Admin Console</span>
+            <span className="brand-name">LIBROTECH</span>
+            <span className="brand-role">Library Management System - Admin Console</span>
           </div>
         </div>
 

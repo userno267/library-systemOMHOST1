@@ -12,7 +12,7 @@ const Icons = {
   Check:  () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
 };
 
-const EMPTY_FORM = { full_name: "", lrn: "", email: "", password: "", role: "student" };
+const EMPTY_FORM = { full_name: "", lrn: "", email: "", phone: "", password: "", role: "student" };
 
 export default function AddUser() {
   const [form,         setForm]         = useState(EMPTY_FORM);
@@ -31,11 +31,11 @@ export default function AddUser() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/users`,
-        form,
-        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-      );
+     await axios.post(
+  `${import.meta.env.VITE_API_URL}/api/users/adminadd`,
+  form,
+  { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+);
       showToast("success", "User created successfully.");
       setForm(EMPTY_FORM);
       setShowPassword(false);
@@ -86,10 +86,16 @@ export default function AddUser() {
               </Field>
             </div>
 
-            <Field label="Email Address" required>
-              <input className="au-input" name="email" type="email" value={form.email}
-                onChange={handleChange} placeholder="student@school.edu" required />
-            </Field>
+            <div className="au-grid-2">
+              <Field label="Email Address" required>
+                <input className="au-input" name="email" type="email" value={form.email}
+                  onChange={handleChange} placeholder="student@school.edu" required />
+              </Field>
+              <Field label="Phone Number">
+                <input className="au-input au-mono" name="phone" type="tel" value={form.phone}
+                  onChange={handleChange} placeholder="e.g. 09171234567" />
+              </Field>
+            </div>
 
             <Field label="Password" required>
               <div className="au-password-wrap">

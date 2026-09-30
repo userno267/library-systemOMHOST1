@@ -264,3 +264,38 @@ export const bulkDeleteUsers = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+export const adminAddUser = async (req, res) => {
+  const { full_name, lrn, email, phone, password, role } = req.body;
+
+  if (!full_name || !lrn || !email || !password || !role) {
+    return res.status(400).json({ message: "All required fields must be filled" });
+  }
+
+  if (!["student", "admin"].includes(role)) {
+    return res.status(400).json({ message: "Invalid role" });
+  }
+
+  try {
+    const hashed = await bcrypt.hash(password, 10);
+
+    const [result] = await pool.query(
+      `INSERT INTO users
+        (full_name, lrn, email, phone, password, role, is_verified)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [full_name, lrn, email, phone || null, hashed, role]
+    );
+
+    res.status(201).json({
+      message: "User created and verified successfully",
+      userId: result.insertId,
+    });
+  } catch (err) {
+    console.error("ADMIN ADD USER ERROR:", err);
+
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ message: "LRN or Email already exists" });
+    }
+
+    res.status(500).json({ message: "Server error" });
+  }
+};

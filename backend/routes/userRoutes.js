@@ -24,7 +24,7 @@ router.put("/profile", auth, upload.single("profile_image"), updateProfile);
 /* ===========================
    ADMIN ONLY ROUTES
 =========================== */
-
+router.post("/add-user", auth, adminOnly, adminAddUser);
 router.get("/", listUsers);
 router.post("/", createUser);
 

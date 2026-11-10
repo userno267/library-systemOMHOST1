@@ -3,6 +3,7 @@ import { useContext, useEffect } from "react";
 import { AuthContext } from "./context/AuthContext";
 import socket from "./socket";
 import { toast } from "react-hot-toast";
+import { isMobile, adminHome } from "./utils/Device";
 
 // Pages
 import Login from "./pages/Login";
@@ -23,9 +24,6 @@ import GroupReceipt from "./pages/GroupReceipt";
 import TransactionsPage from "./pages/TransactionsPage";
 import VerifyEmail from "./pages/VerifyEmail";
 
-
-// inside Routes — Receipt accessible by both roles
-
 // Admin Pages
 import AddBook from "./pages/admin/AddBook";
 import BookManagement from "./pages/admin/BookManagement";
@@ -42,30 +40,11 @@ import AdminBorrow from "./pages/admin/AdminBorrow";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminUserDetail from "./pages/admin/AdminUserDetail";
 import ActiveBorrowManagement from "./pages/admin/ActiveBorrowManagement";
-import AttendanceManagement from "./pages/admin/AttendanceManagement";          
+import AttendanceManagement from "./pages/admin/AttendanceManagement";
 import AdminFineManagement from "./pages/admin/AdminFineManagement";
-
-// inside your Routes
 
 // Components
 import AiAssistant from "./components/AiAssistant";
-
-// ============================
-// Device Detection
-// ============================
-const isMobile = () =>
-  window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
-
-// ============================
-// Admin redirect helper
-// Admins on mobile → student pages
-// Admins on desktop → admin dashboard
-// ============================
-const getAdminRedirect = () =>
-  isMobile() ? "/home" : "/admin/dashboard";
-
-const getAdminDefaultRedirect = () =>
-  isMobile() ? "/home" : "/admin/BookManagement";
 
 // ============================
 // Notification Listener
@@ -98,7 +77,11 @@ function NotificationListener() {
 
 // ============================
 // Protected Route
-// Admins can access student routes when on mobile
+// - Student pages: students, and admins on a phone.
+//   Admins on desktop are sent to the admin console.
+// - Admin pages: admins, and only on desktop.
+//   Admins on a phone are sent to the student home.
+// - Anyone else is sent to "/".
 // ============================
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useContext(AuthContext);
@@ -106,9 +89,17 @@ function ProtectedRoute({ children, role }) {
   if (loading) return <p>Loading...</p>;
   if (!user) return <Navigate to="/login" replace />;
 
-  // Admins bypass role check — device routing handles where they land
-  if (role && user.role !== role && user.role !== "admin") {
-    return <Navigate to="/" replace />;
+  if (role === "student") {
+    if (user.role === "student") return children;
+    // Admin
+    if (isMobile()) return children;
+    return <Navigate to={adminHome()} replace />;
+  }
+
+  if (role === "admin") {
+    if (user.role !== "admin") return <Navigate to="/" replace />;
+    if (isMobile()) return <Navigate to="/home" replace />;
+    return children;
   }
 
   return children;
@@ -116,8 +107,7 @@ function ProtectedRoute({ children, role }) {
 
 // ============================
 // Admin Only Route
-// Strict admin check — for pages that live in the mobile/student
-// layout but must never be accessible to students (e.g. QRBorrowStation)
+// Strict admin check, used for the QR borrow station.
 // ============================
 function AdminOnlyRoute({ children }) {
   const { user, loading } = useContext(AuthContext);
@@ -158,7 +148,7 @@ export default function App() {
         element={
           user ? (
             user.role === "admin" ? (
-              <Navigate to={getAdminDefaultRedirect()} replace />
+              <Navigate to={adminHome()} replace />
             ) : (
               <Navigate to="/home" replace />
             )
@@ -175,7 +165,7 @@ export default function App() {
           !user ? (
             <Login />
           ) : user.role === "admin" ? (
-            <Navigate to={getAdminRedirect()} replace />
+            <Navigate to={adminHome()} replace />
           ) : (
             <Navigate to="/home" replace />
           )
@@ -187,37 +177,38 @@ export default function App() {
           !user ? (
             <Register />
           ) : user.role === "admin" ? (
-            <Navigate to={getAdminRedirect()} replace />
+            <Navigate to={adminHome()} replace />
           ) : (
             <Navigate to="/home" replace />
           )
         }
       />
-       <Route
+      <Route
         path="/verify-email"
         element={
           !user ? (
             <VerifyEmail />
           ) : user.role === "admin" ? (
-            <Navigate to={getAdminRedirect()} replace />
+            <Navigate to={adminHome()} replace />
           ) : (
             <Navigate to="/home" replace />
           )
         }
       />
-<Route path="/receipt/:fineId" element={<Receipt />} />
-<Route path="/receipt/group/:groupId" element={<GroupReceipt />} />
+
+      {/* Receipts: accessible by both roles */}
+      <Route path="/receipt/:fineId" element={<Receipt />} />
+      <Route path="/receipt/group/:groupId" element={<GroupReceipt />} />
+
       {/* ================= STUDENT ROUTES ================= */}
       <Route
-  path="/transactions"
-  element={
-    <ProtectedRoute role="student">
-      <StudentLayout>
-        <TransactionsPage />
-      </StudentLayout>
-    </ProtectedRoute>
-  }
-/>
+        path="/transactions"
+        element={
+          <ProtectedRoute role="student">
+            <StudentLayout><TransactionsPage /></StudentLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/home"
         element={
@@ -300,7 +291,6 @@ export default function App() {
       />
 
       {/* ================= ADMIN-ONLY MOBILE ROUTES ================= */}
-      {/* Lives in student layout but strictly admin only             */}
       <Route
         path="/qr-borrow"
         element={
@@ -311,32 +301,6 @@ export default function App() {
       />
 
       {/* ================= ADMIN ROUTES ================= */}
-
-      <Route
-  path="/admin/fines/:userId"
-  element={
-    <ProtectedRoute role="admin">
-      <AdminFineManagement />
-    </ProtectedRoute>
-  }
-/>
-// inside admin routes:
-<Route
-  path="/admin/AttendanceManagement"
-  element={
-    <ProtectedRoute role="admin">
-      <AttendanceManagement />
-    </ProtectedRoute>
-  }
-/>
-      <Route
-  path="/admin/AttendanceManagement"
-  element={
-    <ProtectedRoute role="admin">
-      <AttendanceManagement />
-    </ProtectedRoute>
-  }
-/>
       <Route
         path="/admin/dashboard"
         element={<ProtectedRoute role="admin"><Dashboard /></ProtectedRoute>}
@@ -370,6 +334,14 @@ export default function App() {
         element={<ProtectedRoute role="admin"><EditUser /></ProtectedRoute>}
       />
       <Route
+        path="/admin/AdminUserDetail/:id"
+        element={<ProtectedRoute role="admin"><AdminUserDetail /></ProtectedRoute>}
+      />
+      <Route
+        path="/admin/fines/:userId"
+        element={<ProtectedRoute role="admin"><AdminFineManagement /></ProtectedRoute>}
+      />
+      <Route
         path="/admin/ActiveBorrowManagement"
         element={<ProtectedRoute role="admin"><ActiveBorrowManagement /></ProtectedRoute>}
       />
@@ -378,16 +350,16 @@ export default function App() {
         element={<ProtectedRoute role="admin"><AdminBorrow /></ProtectedRoute>}
       />
       <Route
+        path="/admin/AttendanceManagement"
+        element={<ProtectedRoute role="admin"><AttendanceManagement /></ProtectedRoute>}
+      />
+      <Route
         path="/admin/ChatManagement"
         element={<ProtectedRoute role="admin"><AdminChat /></ProtectedRoute>}
       />
       <Route
         path="/admin/AdminNotifications"
         element={<ProtectedRoute role="admin"><AdminNotifications /></ProtectedRoute>}
-      />
-      <Route
-        path="/admin/AdminUserDetail/:id"
-        element={<ProtectedRoute role="admin"><AdminUserDetail /></ProtectedRoute>}
       />
       <Route
         path="/admin/QRPrinting"

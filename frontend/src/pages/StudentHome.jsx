@@ -21,12 +21,23 @@ function BookPlaceholder({ title }) {
   );
 }
 
-const SparkleIcon = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg>
-);
-const PeopleIcon = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-);
+// ── Icons per reason type ─────────────────────────────────────────────────────
+const ReasonIcon = ({ reason }) => {
+  if (reason === "collaborative") {
+    return (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    );
+  }
+  if (reason === "popular") {
+    return (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+    );
+  }
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg>
+  );
+};
+
 const BookIcon = () => (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#C4BFB5" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
 );
@@ -114,8 +125,8 @@ export default function StudentHome() {
 
   const subtitleText =
     source === "popular_fallback"
-      ? "Most popular in the library"
-      : "Based on your borrowing history";
+      ? "Showing what's popular in the library while we learn your taste"
+      : "Picked for you based on your borrowing history";
 
   return (
     <>
@@ -150,6 +161,7 @@ export default function StudentHome() {
                     : `${import.meta.env.VITE_API_URL}${book.cover_image}`)
                 : null;
               const available = book.copies > 0;
+              const reason = book.reason || "popular";
 
               return (
                 <Link to={`/books/${id}`} className="sh-card" key={id}>
@@ -172,18 +184,19 @@ export default function StudentHome() {
                         style={{ opacity: 0, transition: "opacity 0.25s" }}
                       />
                     )}
-                    {book.reason && book.reason !== "popular" && (
-                      <span className="sh-reason-chip">
-                        {book.reason === "collaborative" ? <PeopleIcon /> : <SparkleIcon />}
-                        {book.reason === "collaborative" ? "Students like you" : "Based on your reads"}
-                      </span>
-                    )}
+                    <span className={`sh-reason-chip sh-reason--${reason}`}>
+                      <ReasonIcon reason={reason} />
+                      {book.reason_label || "Popular in the library"}
+                    </span>
                   </div>
 
                   <div className="sh-body">
                     <h3 className="sh-book-title" title={book.title}>{book.title}</h3>
                     <p className="sh-author">{book.author}</p>
                     {book.section && <p className="sh-section">{book.section}</p>}
+                    {book.reason_detail && (
+                      <p className="sh-why">{book.reason_detail}</p>
+                    )}
                     <span className={`sh-copies ${available ? "sh-copies--ok" : "sh-copies--out"}`}>
                       <span className="sh-copies-dot" />
                       {available
@@ -301,6 +314,7 @@ export default function StudentHome() {
         }
         .sh-card:hover .sh-cover-img { transform: scale(1.03); }
 
+        /* ── Reason chip (one color per reason type) ── */
         .sh-reason-chip {
           position: absolute; bottom: 8px; left: 8px; right: 8px;
           display: inline-flex; align-items: center; gap: 4px;
@@ -310,6 +324,10 @@ export default function StudentHome() {
           width: fit-content; max-width: calc(100% - 16px);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .sh-reason--content       { color: var(--forest); }
+        .sh-reason--fallback      { color: #2B4CA0; }
+        .sh-reason--collaborative { color: #6B3FA0; }
+        .sh-reason--popular       { color: #7A6A4F; }
 
         /* ── Body ── */
         .sh-body { padding: 12px 12px 6px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
@@ -326,6 +344,10 @@ export default function StudentHome() {
         .sh-section {
           font-size: 0.7rem; color: var(--gold); margin: 0;
           font-family: 'IBM Plex Mono', monospace;
+        }
+        .sh-why {
+          font-size: 0.72rem; color: var(--ink-soft); margin: 4px 0 0;
+          line-height: 1.4; font-style: italic;
         }
         .sh-copies {
           display: inline-flex; align-items: center; gap: 5px;

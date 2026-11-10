@@ -6,6 +6,38 @@ import { refreshForUser } from "../cron/recommendationCron.js";
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL;
 const CACHE_STALE_HOURS = 7;
 
+// ─── Reason labels shown to the student ──────────────────────────────────────
+// Keys match the `reason` values stored in recommendation_cache
+// (mapped in recommendationCron.js: content | fallback | collaborative | popular).
+
+const REASON_INFO = {
+  content: {
+    label: "Similar to your reads",
+    detail: "Shares topics, subjects, or themes with books you've borrowed.",
+  },
+  fallback: {
+    label: "Related to your reads",
+    detail: "A close match to your reading history based on book content.",
+  },
+  collaborative: {
+    label: "Students like you",
+    detail: "Students with similar borrowing habits also borrowed this book.",
+  },
+  popular: {
+    label: "Popular in the library",
+    detail: "Borrowed often by students across the library.",
+  },
+};
+
+function withReasonInfo(row) {
+  const info = REASON_INFO[row.reason] || REASON_INFO.popular;
+  return {
+    ...row,
+    reason_label: info.label,
+    reason_detail: info.detail,
+  };
+}
+
 // ─── Helper: read from cache ──────────────────────────────────────────────────
 
 async function getCachedRecommendations(userId) {
@@ -90,7 +122,7 @@ export const getRecommendations = async (req, res) => {
     if (cached.length > 0) {
       console.log(`[Recommendations] ✅ Serving from cache for user ${userId}`);
       return res.json({
-        recommendations: cached,
+        recommendations: cached.map(withReasonInfo),
         source: "cache",
         cached_at: cached[0].computed_at,
       });
@@ -107,7 +139,7 @@ export const getRecommendations = async (req, res) => {
     if (cachedAfterWait.length > 0) {
       console.log(`[Recommendations] ✅ Serving from cache (post-wait) for user ${userId}`);
       return res.json({
-        recommendations: cachedAfterWait,
+        recommendations: cachedAfterWait.map(withReasonInfo),
         source: "cache",
         cached_at: cachedAfterWait[0].computed_at,
       });
@@ -142,7 +174,10 @@ export const getRecommendations = async (req, res) => {
     );
 
     console.log(`[Recommendations] 📚 Serving ${popular.length} popular books as fallback for user ${userId}`);
-    return res.json({ recommendations: popular, source: "popular_fallback" });
+    return res.json({
+      recommendations: popular.map(withReasonInfo),
+      source: "popular_fallback",
+    });
 
   } catch (err) {
     console.error(`[Recommendations] 💥 Unexpected error for user ${userId}:`, err);

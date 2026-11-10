@@ -181,10 +181,11 @@ export default function ActiveBorrowManagement() {
 
   const rejectRequest = async (id) => {
     if (!confirm("Reject this request?")) return;
-    await fetch(`${baseURL}/api/borrows/admin/reject`, {
+    const res = await fetch(`${baseURL}/api/admin/reject`, {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ borrow_id: id }),
     });
+    if (!res.ok) { const d = await res.json(); alert(d.message || "Reject failed."); return; }
     fetchStats(); fetchBorrows(page, debouncedSearch);
   };
 

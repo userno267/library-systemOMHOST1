@@ -27,7 +27,8 @@ export const borrowBook = async (req, res) => {
     }
 
     const [[active]] = await db.query(
-      `SELECT * FROM borrows WHERE user_id = ? AND book_id = ? AND returned_at IS NULL`,
+      `SELECT * FROM borrows 
+       WHERE user_id = ? AND book_id = ? AND returned_at IS NULL AND status <> 'rejected'`,
       [userId, book_id]
     );
     if (active) return res.status(400).json({ message: "Book already borrowed" });
@@ -74,7 +75,7 @@ export const returnBook = async (req, res) => {
   try {
     const [[borrow]] = await db.query(
       `SELECT * FROM borrows 
-       WHERE user_id = ? AND book_id = ? AND returned_at IS NULL`,
+       WHERE user_id = ? AND book_id = ? AND returned_at IS NULL AND status <> 'rejected'`,
       [userId, book_id]
     );
 
@@ -167,7 +168,7 @@ export const adminBorrowBook = async (req, res) => {
 
     const [[active]] = await db.query(
       `SELECT * FROM borrows 
-       WHERE user_id = ? AND book_id = ? AND returned_at IS NULL`,
+       WHERE user_id = ? AND book_id = ? AND returned_at IS NULL AND status <> 'rejected'`,
       [user_id, book_id]
     );
 
@@ -233,7 +234,7 @@ export const getActiveBorrows = async (req, res) => {
   const offset = (pageNum - 1) * limitNum;
 
   try {
-    let where = "WHERE b.returned_at IS NULL";
+    let where = "WHERE b.returned_at IS NULL AND b.status <> 'rejected'";
     const params = [];
 
     // STATUS FILTER (optional but needed for your frontend dropdown)
@@ -308,7 +309,7 @@ export const adminReturnBook = async (req, res) => {
   try {
     // 1. Get borrow record
     const [[borrow]] = await db.query(
-      `SELECT * FROM borrows WHERE id = ? AND returned_at IS NULL`,
+      `SELECT * FROM borrows WHERE id = ? AND returned_at IS NULL AND status <> 'rejected'`,
       [borrow_id]
     );
 
@@ -511,16 +512,61 @@ export const approveReturn = async (req, res) => {
 
 export const rejectRequest = async (req, res) => {
   const { borrow_id } = req.body;
+  const io = req.app.get("io");
 
   try {
-    await db.query(
-      `UPDATE borrows SET status='rejected' WHERE id=?`,
+    if (!borrow_id) {
+      return res.status(400).json({ message: "Missing borrow id" });
+    }
+
+    // Only pending requests can be rejected
+    const [[borrow]] = await db.query(
+      `SELECT * FROM borrows 
+       WHERE id = ? AND status IN ('pending_borrow', 'pending_return')`,
       [borrow_id]
     );
 
-    res.json({ message: "Request rejected" });
+    if (!borrow) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+
+    const isBorrowRequest = borrow.status === "pending_borrow";
+
+    if (isBorrowRequest) {
+      // Borrow was never approved, so no stock was taken. Mark it rejected.
+      await db.query(
+        `UPDATE borrows SET status = 'rejected' WHERE id = ?`,
+        [borrow_id]
+      );
+    } else {
+      // Return was denied, so the student still has the book.
+      await db.query(
+        `UPDATE borrows SET status = 'borrowed' WHERE id = ?`,
+        [borrow_id]
+      );
+    }
+
+    const message = isBorrowRequest
+      ? "Borrow request rejected"
+      : "Return request rejected";
+
+    io.to(`user_${borrow.user_id}`).emit("borrowUpdate", {
+      bookId: borrow.book_id,
+      action: "rejected",
+      message,
+    });
+
+    io.to("user_admins").emit("borrowUpdate", {
+      bookId: borrow.book_id,
+      userId: borrow.user_id,
+      action: "rejected",
+      message: `${message} for user ${borrow.user_id}`,
+    });
+
+    res.json({ message });
 
   } catch (err) {
-    res.status(500).json({ message: "Error rejecting" });
+    console.error("REJECT ERROR:", err);
+    res.status(500).json({ message: "Error rejecting request" });
   }
 };

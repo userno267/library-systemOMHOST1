@@ -163,6 +163,7 @@ export default function ReportsManagement() {
   const [showModal, setShowModal] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const iframeRef = useRef(null);
+  const reqIdRef = useRef(0);
   const token = localStorage.getItem("token");
 
   const closeModal = () => {
@@ -189,8 +190,12 @@ export default function ReportsManagement() {
       case "custom": return;
       default: break;
     }
-    setStartDate(start.toISOString().split("T")[0]);
-    setEndDate(end.toISOString().split("T")[0]);
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    console.log(`[Reports] range "${type}" → ${fmt(start)} to ${fmt(end)}`);
+    setStartDate(fmt(start));
+    setEndDate(fmt(end));
   };
 
   const printPDF = () => {
@@ -221,6 +226,7 @@ export default function ReportsManagement() {
   }, [previewPDF, isPDFReady]);
 
   const fetchReport = async () => {
+    const myReqId = ++reqIdRef.current;
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -228,28 +234,47 @@ export default function ReportsManagement() {
         params.append("startDate", startDate);
         params.append("endDate", endDate);
       }
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/reports/${reportType}?${params}`,
-        { headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "anyvalue" } }
-      );
-      if (!res.ok) throw new Error("Failed to fetch report");
+      const url = `${import.meta.env.VITE_API_URL}/api/reports/${reportType}?${params}`;
+      console.log(`[Reports] #${myReqId} GET ${url}`);
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "anyvalue" },
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(`[Reports] #${myReqId} HTTP ${res.status}:`, body);
+        throw new Error(`Failed to fetch report (${res.status})`);
+      }
+
       const data = await res.json();
+
+      // A newer request has been made since this one started — drop this result
+      if (myReqId !== reqIdRef.current) {
+        console.log(`[Reports] #${myReqId} stale response ignored`);
+        return;
+      }
+
       if (Array.isArray(data)) {
+        console.log(`[Reports] #${myReqId} ${reportType}: ${data.length} rows (bare array)`);
         setReports(data); setReportMeta(null);
       } else if (data.data) {
         const { data: rows, ...meta } = data;
+        console.log(`[Reports] #${myReqId} ${reportType}: ${rows.length} rows`, meta);
         setReports(rows); setReportMeta(meta);
       } else if (data.topBooks) {
         const { topBooks, ...meta } = data;
+        console.log(`[Reports] #${myReqId} ${reportType}: ${topBooks.length} top books`, meta);
         setReports(topBooks); setReportMeta(meta);
       } else {
+        console.warn(`[Reports] #${myReqId} unexpected response shape`, data);
         setReports([]); setReportMeta(null);
       }
     } catch (err) {
-      console.error("Error loading report:", err);
-      setReports([]); setReportMeta(null);
+      console.error("[Reports] Error loading report:", err);
+      if (myReqId === reqIdRef.current) { setReports([]); setReportMeta(null); }
     } finally {
-      setLoading(false);
+      if (myReqId === reqIdRef.current) setLoading(false);
     }
   };
 

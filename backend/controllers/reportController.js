@@ -21,6 +21,8 @@ const warn = (...args) =>
 // notificationCron.js flips late books from 'borrowed' → 'overdue', so every
 // "currently out" query must include BOTH statuses or late books vanish.
 const ACTIVE_SQL = "('borrowed','overdue')";
+// Statuses shown in the currently-borrowed report: still out + already returned
+const BORROW_HISTORY_SQL = "('borrowed','overdue','returned')";
 const FINE_PER_BOOK = 5;
 // Fines created manually by admins — NOT the auto overdue fine
 const MANUAL_FINE_TYPES_SQL = "('lost','damaged','other')";
@@ -222,13 +224,16 @@ export const getOverviewReportData = async (query = {}) => {
 };
 
 /* =========================================
-   3️⃣ CURRENTLY BORROWED
-   "Currently borrowed" means STILL OUT right now, so there is NO
-   borrow-date filter (a book borrowed 40 days ago and not returned
-   must always show). Includes 'overdue' status.
+   3️⃣ BORROW HISTORY (CURRENTLY BORROWED + RETURNED)
+   - Books still out (borrowed / overdue) are ALWAYS shown, no matter
+     when they were borrowed.
+   - Returned books are shown only if they were borrowed inside the
+     selected date range (defaults to the last 30 days).
+   - Summary separates still-out from returned so both can be read
+     at a glance.
 ========================================= */
 export const getCurrentlyBorrowedReportData = async (query = {}) => {
-  dbg("currently-borrowed: date range ignored (shows everything still out)");
+  const { startDate, endDate } = resolveRange(query, "currently-borrowed", last30DaysRange);
 
   const rows = await runQuery(
     "currently-borrowed",
@@ -238,22 +243,36 @@ export const getCurrentlyBorrowedReportData = async (query = {}) => {
        u.lrn,
        DATE_FORMAT(br.borrowed_at, '%Y-%m-%d %H:%i') AS borrowed_at,
        DATE_FORMAT(br.due_date, '%Y-%m-%d') AS due_date,
+       DATE_FORMAT(br.returned_at, '%Y-%m-%d %H:%i') AS returned_at,
        br.status,
-       GREATEST(DATEDIFF(NOW(), br.due_date), 0) AS days_overdue
+       GREATEST(DATEDIFF(COALESCE(br.returned_at, NOW()), br.due_date), 0) AS days_overdue
      FROM borrows br
      JOIN books bk ON br.book_id = bk.id
      JOIN users u ON br.user_id = u.id
-     WHERE br.status IN ${ACTIVE_SQL}
-     ORDER BY br.due_date ASC`
+     WHERE br.status IN ${BORROW_HISTORY_SQL}
+       AND (
+         br.status IN ${ACTIVE_SQL}
+         OR DATE(br.borrowed_at) BETWEEN ? AND ?
+       )
+     ORDER BY br.borrowed_at DESC`,
+    [startDate, endDate]
   );
 
+  const isStillOut = (r) => r.status !== "returned";
+
   const summary = {
-    totalCurrentlyBorrowed: rows.length,
-    overdue: rows.filter((r) => Number(r.days_overdue) > 0).length,
-    onTime: rows.filter((r) => Number(r.days_overdue) === 0).length,
+    totalRecords: rows.length,
+    currentlyOut: rows.filter(isStillOut).length,
+    overdue: rows.filter((r) => isStillOut(r) && Number(r.days_overdue) > 0).length,
+    returned: rows.filter((r) => !isStillOut(r)).length,
+    returnedLate: rows.filter((r) => !isStillOut(r) && Number(r.days_overdue) > 0).length,
   };
 
-  return { data: rows, summary };
+  return {
+    range: { startDate, endDate },
+    data: rows,
+    summary,
+  };
 };
 
 /* =========================================

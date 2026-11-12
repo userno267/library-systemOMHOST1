@@ -1,6 +1,13 @@
 import db from "../db/db.js";
 import { notifyWishlistUsers } from "./wishlistController.js"; // ✅ add this
 
+const TZ = process.env.REPORT_TZ || "Asia/Manila";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// "today" in the configured timezone (en-CA formats as YYYY-MM-DD)
+const todayInTz = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+
 export const borrowBook = async (req, res) => {
   const userId = req.user.id;
   const { book_id } = req.body;
@@ -225,20 +232,33 @@ export const adminBorrowBook = async (req, res) => {
 
 /* ===========================
    GET ACTIVE BORROWS
+   - status=returned → returned books only, limited to one day
+     (?date=YYYY-MM-DD, defaults to today in REPORT_TZ / Asia/Manila)
+   - any other status / no status → unchanged (books still out)
 =========================== */
 export const getActiveBorrows = async (req, res) => {
-  const { page = 1, limit = 10, search = "", status = "" } = req.query;
+  const { page = 1, limit = 10, search = "", status = "", date = "" } = req.query;
 
   const pageNum = Number(page);
   const limitNum = Number(limit);
   const offset = (pageNum - 1) * limitNum;
 
   try {
-    let where = "WHERE b.returned_at IS NULL AND b.status <> 'rejected'";
+    const isReturnedView = status === "returned";
+    const day = isReturnedView
+      ? (DATE_RE.test(String(date)) ? String(date) : todayInTz())
+      : null;
+
+    let where = isReturnedView
+      ? "WHERE b.status = 'returned'"
+      : "WHERE b.returned_at IS NULL AND b.status <> 'rejected'";
     const params = [];
 
-    // STATUS FILTER (optional but needed for your frontend dropdown)
-    if (status) {
+    if (isReturnedView) {
+      // returned_at is set when the return is approved / processed
+      where += " AND DATE(b.returned_at) = ?";
+      params.push(day);
+    } else if (status) {
       where += " AND b.status = ?";
       params.push(status);
     }
@@ -255,6 +275,8 @@ export const getActiveBorrows = async (req, res) => {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
+    const orderBy = isReturnedView ? "b.returned_at DESC" : "b.id DESC";
+
     // MAIN DATA
     const [rows] = await db.query(
       `
@@ -263,6 +285,8 @@ export const getActiveBorrows = async (req, res) => {
         b.user_id,
         b.book_id,
         b.due_date,
+        b.borrowed_at,
+        b.returned_at,
         b.status,
         u.full_name,
         u.lrn,
@@ -271,7 +295,7 @@ export const getActiveBorrows = async (req, res) => {
       JOIN users u ON u.id = b.user_id
       JOIN books bk ON bk.id = b.book_id
       ${where}
-      ORDER BY b.id DESC
+      ORDER BY ${orderBy}
       LIMIT ? OFFSET ?
       `,
       [...params, limitNum, offset]
@@ -294,6 +318,7 @@ export const getActiveBorrows = async (req, res) => {
       page: pageNum,
       totalPages: Math.ceil(count.total / limitNum),
       total: count.total,
+      ...(day && { date: day }),
     });
 
   } catch (err) {

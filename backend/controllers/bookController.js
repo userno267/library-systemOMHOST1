@@ -610,13 +610,13 @@ export const getSubjects = async (req, res) => {
     res.status(500).json([]);
   }
 };
-
-
 export const printQRCodes = async (req, res) => {
   try {
     const {
-      paper = { width: 595, height: 842 }, // A4 default
-      sticker = { width: 144, height: 144, margin: 10 }, // 2x2 default
+      paper = { width: 595, height: 842 }, // A4
+      sticker = { height: 144, margin: 10 }, // width is now calculated
+      columns = 4,                           // stickers per row
+      pageMargin = 18,                       // outer page margin (~0.25")
       includeCutGuides = true,
       books = []
     } = req.body;
@@ -625,143 +625,122 @@ export const printQRCodes = async (req, res) => {
       return res.status(400).json({ message: "No books selected" });
     }
 
-    // Create PDF
+    // ===== LAYOUT (validate BEFORE creating/piping the PDF) =====
+    const gap = sticker.margin;
+    const usableWidth = paper.width - pageMargin * 2;
+    const usableHeight = paper.height - pageMargin * 2;
+
+    // Width is derived so exactly `columns` fit in one row
+    const stickerWidth = (usableWidth - gap * (columns - 1)) / columns;
+    const stickerHeight = sticker.height;
+
+    const stickersPerRow = columns;
+    const stickersPerCol = Math.floor(
+      (usableHeight + gap) / (stickerHeight + gap)
+    );
+    const stickersPerPage = stickersPerRow * stickersPerCol;
+
+    if (stickerWidth <= 0 || stickersPerPage <= 0) {
+      return res.status(400).json({
+        message: "Sticker size too large for selected paper"
+      });
+    }
+
+    // QR size: square, fits inside the sticker and leaves room for text
+    const textAreaHeight = 50;
+    const qrSize = Math.min(stickerWidth - 16, stickerHeight - textAreaHeight - 8);
+
+    // ===== CREATE PDF =====
     const doc = new PDFDocument({
       size: [paper.width, paper.height],
       margin: 0
     });
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=qr-stickers.pdf"
-    );
-
+    res.setHeader("Content-Disposition", "attachment; filename=qr-stickers.pdf");
     doc.pipe(res);
-
-    const stickersPerRow = Math.floor(
-      paper.width / (sticker.width + sticker.margin)
-    );
-
-    const stickersPerCol = Math.floor(
-      paper.height / (sticker.height + sticker.margin)
-    );
-
-    const stickersPerPage = stickersPerRow * stickersPerCol;
-
-    if (stickersPerPage <= 0) {
-      return res.status(400).json({
-        message: "Sticker size too large for selected paper"
-      });
-    }
 
     let currentIndex = 0;
 
     for (const item of books) {
       const { bookId, copiesToPrint } = item;
-
       if (!copiesToPrint || copiesToPrint <= 0) continue;
 
-      // Fetch book from DB
       const [rows] = await db.query(
         `SELECT id, title, volume, call_number, qr_code_text
          FROM books
          WHERE id = ?`,
         [bookId]
       );
-
       if (!rows.length) continue;
 
       const book = rows[0];
+      const title =
+        book.title.length > 30 ? book.title.substring(0, 27) + "..." : book.title;
+
+      let imgBuffer = null;
+      if (book.qr_code_text) {
+        const base64Data = book.qr_code_text.replace(/^data:image\/png;base64,/, "");
+        imgBuffer = Buffer.from(base64Data, "base64");
+      }
 
       for (let copy = 1; copy <= copiesToPrint; copy++) {
-
-        // Add new page when needed
         if (currentIndex > 0 && currentIndex % stickersPerPage === 0) {
-          doc.addPage({
-            size: [paper.width, paper.height],
-            margin: 0
-          });
+          doc.addPage({ size: [paper.width, paper.height], margin: 0 });
         }
 
         const position = currentIndex % stickersPerPage;
         const row = Math.floor(position / stickersPerRow);
         const col = position % stickersPerRow;
 
-        const x =
-          col * (sticker.width + sticker.margin) + sticker.margin / 2;
-        const y =
-          row * (sticker.height + sticker.margin) + sticker.margin / 2;
+        const x = pageMargin + col * (stickerWidth + gap);
+        const y = pageMargin + row * (stickerHeight + gap);
 
-        // Draw cut border
+        // Cut guide
         if (includeCutGuides) {
-          doc.rect(x, y, sticker.width, sticker.height).stroke();
+          doc.lineWidth(0.5).rect(x, y, stickerWidth, stickerHeight).stroke();
         }
 
-        // ===== QR IMAGE =====
-        if (book.qr_code_text) {
-          const base64Data = book.qr_code_text.replace(
-            /^data:image\/png;base64,/,
-            ""
-          );
-
-          const imgBuffer = Buffer.from(base64Data, "base64");
-
-          doc.image(imgBuffer, x + 15, y + 10, {
-            fit: [sticker.width - 30, sticker.height - 70],
-            align: "center"
+        // ===== QR IMAGE (centered) =====
+        if (imgBuffer) {
+          doc.image(imgBuffer, x + (stickerWidth - qrSize) / 2, y + 6, {
+            fit: [qrSize, qrSize]
           });
         }
 
         // ===== TEXT =====
+        const textOpts = {
+          width: stickerWidth - 8,
+          align: "center",
+          lineBreak: false,
+          ellipsis: true
+        };
+        let textY = y + 6 + qrSize + 4;
 
-        const title =
-          book.title.length > 30
-            ? book.title.substring(0, 27) + "..."
-            : book.title;
-
-        doc
-          .fontSize(8)
-          .text(title, x + 5, y + sticker.height - 55, {
-            width: sticker.width - 10,
-            align: "center"
-          });
+        doc.fontSize(7).text(title, x + 4, textY, textOpts);
+        textY += 9;
 
         if (book.volume) {
-          doc
-            .fontSize(7)
-            .text(`Vol. ${book.volume}`, {
-              width: sticker.width - 10,
-              align: "center"
-            });
+          doc.fontSize(6.5).text(`Vol. ${book.volume}`, x + 4, textY, textOpts);
+          textY += 8;
         }
 
         if (book.call_number) {
-          doc
-            .fontSize(7)
-            .text(book.call_number, {
-              width: sticker.width - 10,
-              align: "center"
-            });
+          doc.fontSize(6.5).text(book.call_number, x + 4, textY, textOpts);
+          textY += 8;
         }
 
-        doc
-          .fontSize(7)
-          .text(`Copy ${copy} of ${copiesToPrint}`, {
-            width: sticker.width - 10,
-            align: "center"
-          });
+        doc.fontSize(6.5).text(`Copy ${copy} of ${copiesToPrint}`, x + 4, textY, textOpts);
 
         currentIndex++;
       }
     }
 
     doc.end();
-
   } catch (error) {
     console.error("PRINT QR ERROR:", error);
-    res.status(500).json({
-      message: "Failed to generate QR stickers"
-    });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Failed to generate QR stickers" });
+    }
   }
 };

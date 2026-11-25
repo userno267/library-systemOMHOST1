@@ -8,6 +8,10 @@ dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// notificationCron.js flips late books from 'borrowed' → 'overdue', so every
+// "still out" count must include BOTH statuses or late books disappear.
+const ACTIVE_SQL = "('borrowed','overdue')";
+
 /* ================= JSON HELPERS ================= */
 function extractJSON(text) {
   if (!text) return null;
@@ -53,12 +57,12 @@ export const getOverview = async (req, res) => {
       db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'student'"),
       db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'"),
       db.query("SELECT COUNT(*) AS count FROM borrows"),
-      db.query("SELECT COUNT(*) AS count FROM borrows WHERE status = 'borrowed'"),
+      db.query(`SELECT COUNT(*) AS count FROM borrows WHERE status IN ${ACTIVE_SQL}`),
       db.query("SELECT COUNT(*) AS count FROM borrows WHERE status = 'returned'"),
       db.query(`
-        SELECT COUNT(*) AS count 
-        FROM borrows 
-        WHERE status = 'borrowed' 
+        SELECT COUNT(*) AS count
+        FROM borrows
+        WHERE status IN ${ACTIVE_SQL}
         AND due_date < NOW()
       `)
     ]);
@@ -242,7 +246,7 @@ export const getMLData = async (req, res) => {
           DATE_FORMAT(borrowed_at, '%Y-%m') AS month,
           COUNT(*) AS total_borrows,
           SUM(CASE WHEN status = 'returned' THEN 1 ELSE 0 END) AS returned,
-          SUM(CASE WHEN status = 'borrowed' AND due_date < NOW() THEN 1 ELSE 0 END) AS overdue
+          SUM(CASE WHEN status IN ${ACTIVE_SQL} AND due_date < NOW() THEN 1 ELSE 0 END) AS overdue
         FROM borrows
         WHERE borrowed_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
         GROUP BY month
@@ -280,9 +284,9 @@ export const getMLData = async (req, res) => {
           u.full_name,
           u.lrn,
           COUNT(b.id) AS total_borrows,
-          SUM(CASE WHEN b.status = 'borrowed' AND b.due_date < NOW() THEN 1 ELSE 0 END) AS overdue_count,
+          SUM(CASE WHEN b.status IN ${ACTIVE_SQL} AND b.due_date < NOW() THEN 1 ELSE 0 END) AS overdue_count,
           ROUND(
-            SUM(CASE WHEN b.status = 'borrowed' AND b.due_date < NOW() THEN 1 ELSE 0 END) 
+            SUM(CASE WHEN b.status IN ${ACTIVE_SQL} AND b.due_date < NOW() THEN 1 ELSE 0 END) 
             / COUNT(b.id) * 100, 1
           ) AS overdue_rate_pct
         FROM borrows b

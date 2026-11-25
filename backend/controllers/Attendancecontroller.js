@@ -2,6 +2,12 @@
 
 import db from "../db/db.js";
 
+const TZ = process.env.REPORT_TZ || "Asia/Manila";
+
+// "today" in the configured timezone (en-CA formats as YYYY-MM-DD)
+const todayInTz = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+
 /* ═══════════════════════════════════════
    SCAN — time in or time out
    Called when student scans wall QR
@@ -11,7 +17,7 @@ export const scanAttendance = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const today = todayInTz();
 
     // Check if user already has a record today
     const [[existing]] = await db.query(
@@ -136,7 +142,7 @@ export const getAttendance = async (req, res) => {
 ═══════════════════════════════════════ */
 export const getAttendanceStats = async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayInTz();
 
     const [[todayIn]]   = await db.query(
       `SELECT COUNT(*) AS count FROM attendance WHERE date = ?`, [today]
@@ -152,6 +158,7 @@ export const getAttendanceStats = async (req, res) => {
     );
 
     res.json({
+      today,
       todayTotal:   todayIn.count,
       todayOut:     todayOut.count,
       currentlyIn:  stillIn.count,

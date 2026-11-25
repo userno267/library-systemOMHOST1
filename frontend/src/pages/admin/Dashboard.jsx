@@ -43,6 +43,18 @@ const HEAT_COLORS = [
   "#E8CE8A"
 ];
 
+const ATTENDANCE_REFRESH_MS = 60000;
+
+// Show a stored timestamp as a Manila clock time
+const fmtTime = (value) => {
+  if (!value) return "—";
+  return new Date(value).toLocaleTimeString("en-PH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Manila"
+  });
+};
+
 export default function Dashboard() {
   const [overview, setOverview] = useState({});
   const [borrowTrends, setBorrowTrends] = useState([]);
@@ -56,6 +68,10 @@ export default function Dashboard() {
   const [mlInsight, setMlInsight] = useState(null);
   const [loadingML, setLoadingML] = useState(false);
 
+  const [attendanceStats, setAttendanceStats] = useState(null);
+  const [attendanceRows, setAttendanceRows] = useState([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+
   const token = localStorage.getItem("token");
 
   const headers = {
@@ -65,6 +81,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchAll();
+  }, []);
+
+  useEffect(() => {
+    fetchAttendance();
+    const id = setInterval(fetchAttendance, ATTENDANCE_REFRESH_MS);
+    return () => clearInterval(id);
   }, []);
 
   const fetchAll = async () => {
@@ -160,6 +182,33 @@ export default function Dashboard() {
     setLoadingML(false);
   };
 
+  const fetchAttendance = async () => {
+    setLoadingAttendance(true);
+
+    try {
+      // Stats first: the response includes `today` (Manila date),
+      // which the list request uses so both match.
+      const statsRes = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/attendance/stats`,
+        { headers }
+      );
+      setAttendanceStats(statsRes.data);
+
+      const listRes = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/attendance`,
+        {
+          headers,
+          params: { date: statsRes.data.today, limit: 50 }
+        }
+      );
+      setAttendanceRows(listRes.data.attendance || []);
+    } catch (err) {
+      console.error("Attendance fetch failed", err);
+    }
+
+    setLoadingAttendance(false);
+  };
+
   const statusData = [
     {
       name: "Active",
@@ -219,6 +268,93 @@ export default function Dashboard() {
             tone="espresso"
           />
         </div>
+
+        {/* ── TODAY'S ATTENDANCE ── */}
+        <section className="card">
+          <div className="ml-header">
+            <SectionHead
+              eyebrow={
+                attendanceStats?.today
+                  ? `Date: ${attendanceStats.today}`
+                  : "Campus Entry"
+              }
+              title="Today's Attendance"
+            />
+
+            {loadingAttendance && (
+              <span className="att-refreshing">Updating…</span>
+            )}
+          </div>
+
+          {attendanceStats ? (
+            <>
+              <div className="att-tiles">
+                <AttendanceTile
+                  label="Timed In Today"
+                  value={attendanceStats.todayTotal}
+                  tone="forest"
+                />
+                <AttendanceTile
+                  label="Currently In"
+                  value={attendanceStats.currentlyIn}
+                  tone="gold"
+                />
+                <AttendanceTile
+                  label="Completed"
+                  value={attendanceStats.todayOut}
+                  tone="espresso"
+                />
+                <AttendanceTile
+                  label="All-Time Records"
+                  value={attendanceStats.allTimeTotal}
+                  tone="neutral"
+                />
+              </div>
+
+              {attendanceRows.length === 0 ? (
+                <p className="ml-text">
+                  No attendance recorded today.
+                </p>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>LRN</th>
+                        <th>Time In</th>
+                        <th>Time Out</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {attendanceRows.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.full_name}</td>
+                          <td>{r.lrn}</td>
+                          <td>{fmtTime(r.time_in)}</td>
+                          <td>{fmtTime(r.time_out)}</td>
+                          <td>
+                            <span
+                              className={`att-status ${
+                                r.time_out ? "att-status-out" : "att-status-in"
+                              }`}
+                            >
+                              {r.time_out ? "Out" : "In"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="loading-text">Loading attendance…</p>
+          )}
+        </section>
 
         <section className="card">
           <SectionHead
@@ -999,6 +1135,68 @@ export default function Dashboard() {
           margin-bottom: 20px;
         }
 
+        /* ── Attendance ── */
+        .att-tiles {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 14px;
+          margin-bottom: 20px;
+        }
+
+        .att-tile {
+          background: var(--sage);
+          border: 1px solid var(--line);
+          border-left: 4px solid var(--ink-soft);
+          border-radius: 6px;
+          padding: 14px 16px;
+        }
+
+        .att-tile.forest { border-left-color: var(--forest); }
+        .att-tile.gold { border-left-color: var(--gold); }
+        .att-tile.espresso { border-left-color: var(--rust); }
+
+        .att-tile-value {
+          font-family: 'IBM Plex Mono', monospace;
+          font-weight: 600;
+          font-size: 1.6rem;
+          color: var(--ink);
+          line-height: 1;
+        }
+
+        .att-tile-label {
+          font-size: 0.72rem;
+          color: var(--ink-soft);
+          margin-top: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .att-status {
+          display: inline-block;
+          padding: 3px 10px;
+          border-radius: 20px;
+          font-size: 0.74rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
+        }
+
+        .att-status-in {
+          background: #DCEADF;
+          color: var(--forest);
+        }
+
+        .att-status-out {
+          background: #F3EEDF;
+          color: var(--ink-soft);
+        }
+
+        .att-refreshing {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 0.72rem;
+          color: var(--ink-soft);
+        }
+
         table {
           width: 100%;
           border-collapse: collapse;
@@ -1295,6 +1493,10 @@ export default function Dashboard() {
             grid-template-columns: 1fr 1fr;
           }
 
+          .att-tiles {
+            grid-template-columns: 1fr 1fr;
+          }
+
           .grid {
             grid-template-columns: 1fr;
           }
@@ -1328,6 +1530,20 @@ function KpiCard({ label, value, tone }) {
       </div>
 
       <div className="kpi-label">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function AttendanceTile({ label, value, tone }) {
+  return (
+    <div className={`att-tile ${tone || ""}`}>
+      <div className="att-tile-value">
+        {value ?? 0}
+      </div>
+
+      <div className="att-tile-label">
         {label}
       </div>
     </div>

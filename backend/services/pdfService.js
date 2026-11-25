@@ -1,8 +1,42 @@
 // services/pdfService.js
 import PDFDocument from "pdfkit";
 
+const MARGIN = 40;
+const CELL_PAD = 5;
+const BORDER_COLOR = "#999999";
+const HEADER_BG = "#e5e5e5";
+const TEXT_COLOR = "#000000";
+const FONT_REGULAR = "Helvetica";
+const FONT_BOLD = "Helvetica-Bold";
+
+// Format any cell value for display. Dates (returned as JS Date objects by
+// mysql2 for DATETIME/TIMESTAMP columns) are formatted explicitly so they
+// never fall back to Date.toString(), which appends "GMT+0800
+// (Philippine Standard Time)".
+const formatCellValue = (value) => {
+  if (value === null || value === undefined || value === "") return "—";
+
+  if (value instanceof Date) {
+    return value.toLocaleString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  }
+
+  return String(value);
+};
+
 /**
- * Generate Professional PDF (Portrait or Landscape)
+ * Generate a PDF report (portrait or landscape).
+ *
+ * columns: [{ key, header, weight? }]
+ *   weight controls relative column width (default 1). Give long text
+ *   columns (titles, names) a bigger weight than short ones (IDs, dates).
  */
 export const generateReportPDF = ({
   res,
@@ -13,15 +47,17 @@ export const generateReportPDF = ({
   options = {},
 }) => {
   const {
-    fontSize = 12,
+    fontSize = 10,
     primaryColor = "#000000",
-    orientation = "landscape", // NEW OPTION
+    orientation = "landscape",
   } = options;
+
+  if (!columns.length) throw new Error("generateReportPDF: columns is required");
 
   const doc = new PDFDocument({
     size: "A4",
     layout: orientation === "portrait" ? "portrait" : "landscape",
-    margin: 40,
+    margin: MARGIN,
   });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -31,6 +67,9 @@ export const generateReportPDF = ({
   );
 
   doc.pipe(res);
+
+  const pageWidth = doc.page.width - MARGIN * 2;
+  const bottomLimit = () => doc.page.height - MARGIN;
 
   /* ===============================
      HEADER
@@ -55,15 +94,13 @@ export const generateReportPDF = ({
         second: "2-digit",
         hour12: true,
       })}`,
-      {
-        align: "center",
-      }
+      { align: "center" }
     );
 
   doc.moveDown(1.5);
 
   /* ===============================
-     SUMMARY SECTION (Optional)
+     SUMMARY (optional)
   =============================== */
   if (summary) {
     doc
@@ -76,7 +113,7 @@ export const generateReportPDF = ({
     Object.entries(summary).forEach(([key, value]) => {
       doc
         .fontSize(fontSize)
-        .fillColor("#000000")
+        .fillColor(TEXT_COLOR)
         .text(`${key}: ${value}`);
     });
 
@@ -84,150 +121,135 @@ export const generateReportPDF = ({
   }
 
   /* ===============================
-     TABLE ENGINE (WITH BORDERS)
+     COLUMN LAYOUT
   =============================== */
+  const headers = columns.map((c) => c.header);
+  const totalWeight = columns.reduce((sum, c) => sum + (c.weight ?? 1), 0);
+  const colWidths = columns.map((c) => (pageWidth * (c.weight ?? 1)) / totalWeight);
 
-  const pageWidth =
-    doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const colX = [];
+  let xCursor = MARGIN;
+  colWidths.forEach((w) => {
+    colX.push(xCursor);
+    xCursor += w;
+  });
 
-  const startX = doc.page.margins.left;
-  const cellPadding = 5;
-  const borderColor = "#999999";
+  // One set of text options for BOTH measuring and drawing, so heights match
+  const textOpts = (colWidth) => ({
+    width: colWidth - CELL_PAD * 2,
+    lineGap: 0,
+    paragraphGap: 0,
+  });
 
-  const columnWidth = pageWidth / columns.length;
-
-  // Format any cell value for display. Dates (returned as JS Date objects by
-  // mysql2 for DATETIME/TIMESTAMP columns) are formatted explicitly so they
-  // never fall back to Date.toString(), which appends "GMT+0800
-  // (Philippine Standard Time)".
-  const formatCellValue = (value) => {
-    if (value === null || value === undefined || value === "") return "—";
-
-    if (value instanceof Date) {
-      return value.toLocaleString("en-US", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
-    }
-
-    return String(value);
+  const cellHeight = (text, font, size, colWidth) => {
+    doc.font(font).fontSize(size);
+    return doc.heightOfString(text, textOpts(colWidth));
   };
 
-  // Reusable: draw the header row (background + text + border) at given y, return new y
-  const drawTableHeader = (y) => {
-    const headerHeight = fontSize + cellPadding * 2;
+  // Height of the tallest cell in a row, plus padding
+  const rowHeight = (cells, font, size) => {
+    const tallest = cells.reduce(
+      (max, text, i) => Math.max(max, cellHeight(text, font, size, colWidths[i])),
+      0
+    );
+    return tallest + CELL_PAD * 2;
+  };
 
-    // Header background
+  const drawRow = ({ cells, y, height, font, size, fill = null }) => {
+    if (fill) {
+      doc.rect(MARGIN, y, pageWidth, height).fill(fill);
+    }
+
     doc
-      .rect(startX, y, pageWidth, headerHeight)
-      .fillAndStroke("#e5e5e5", borderColor);
-
-    // Header text + vertical column dividers
-    doc.font("Helvetica-Bold").fontSize(fontSize).fillColor("#000000");
-    let x = startX;
-    columns.forEach((col) => {
-      doc.text(col.header, x + cellPadding, y + cellPadding, {
-        width: columnWidth - cellPadding * 2,
-        align: "left",
-      });
-
-      // vertical divider on the right edge of this column
-      doc
-        .moveTo(x, y)
-        .lineTo(x, y + headerHeight)
-        .strokeColor(borderColor)
-        .stroke();
-
-      x += columnWidth;
-    });
-    // final right-edge divider
-    doc
-      .moveTo(x, y)
-      .lineTo(x, y + headerHeight)
-      .strokeColor(borderColor)
+      .rect(MARGIN, y, pageWidth, height)
+      .lineWidth(0.5)
+      .strokeColor(BORDER_COLOR)
       .stroke();
 
+    cells.forEach((text, i) => {
+      doc
+        .font(font)
+        .fontSize(size)
+        .fillColor(TEXT_COLOR)
+        .text(text, colX[i] + CELL_PAD, y + CELL_PAD, textOpts(colWidths[i]));
+
+      if (i > 0) {
+        doc
+          .moveTo(colX[i], y)
+          .lineTo(colX[i], y + height)
+          .lineWidth(0.5)
+          .strokeColor(BORDER_COLOR)
+          .stroke();
+      }
+    });
+  };
+
+  const headerHeight = rowHeight(headers, FONT_BOLD, fontSize);
+
+  const drawHeader = (y) => {
+    drawRow({
+      cells: headers,
+      y,
+      height: headerHeight,
+      font: FONT_BOLD,
+      size: fontSize,
+      fill: HEADER_BG,
+    });
     return y + headerHeight;
   };
 
+  /* ===============================
+     TABLE
+  =============================== */
   let y = doc.y;
-  y = drawTableHeader(y);
 
-  /* ---------- TABLE ROWS ---------- */
-  doc.font("Helvetica").fontSize(fontSize).fillColor("#000000");
+  if (y + headerHeight + CELL_PAD * 2 > bottomLimit()) {
+    doc.addPage();
+    y = MARGIN;
+  }
+  y = drawHeader(y);
+
+  if (!data.length) {
+    doc
+      .font(FONT_REGULAR)
+      .fontSize(fontSize)
+      .fillColor("gray")
+      .text("No records found for the selected filters.", MARGIN, y + 10, {
+        width: pageWidth,
+        align: "center",
+      });
+    y += 40;
+  }
 
   data.forEach((row) => {
-    let rowHeight = 0;
-    let x = startX;
+    const cells = columns.map((c) => formatCellValue(row[c.key]));
+    const height = rowHeight(cells, FONT_REGULAR, fontSize);
 
-    // Calculate tallest cell in row
-    columns.forEach((col) => {
-      const text = formatCellValue(row[col.key]);
-      const height = doc.heightOfString(text, {
-        width: columnWidth - cellPadding * 2,
-      });
-      rowHeight = Math.max(rowHeight, height);
-    });
-
-    rowHeight += cellPadding * 2;
-
-    // Page break check — also redraw the header on the new page
-    if (y + rowHeight > doc.page.height - 50) {
-      doc.addPage({
-        layout: orientation === "portrait" ? "portrait" : "landscape",
-      });
-      y = doc.page.margins.top;
-      y = drawTableHeader(y);
-      doc.font("Helvetica").fontSize(fontSize).fillColor("#000000");
+    if (y + height > bottomLimit()) {
+      doc.addPage();
+      y = MARGIN;
+      y = drawHeader(y);
     }
 
-    // Row outer border
-    doc
-      .rect(startX, y, pageWidth, rowHeight)
-      .strokeColor(borderColor)
-      .stroke();
-
-    // Render cells + vertical dividers
-    x = startX;
-    columns.forEach((col) => {
-      const text = formatCellValue(row[col.key]);
-
-      doc.text(text, x + cellPadding, y + cellPadding, {
-        width: columnWidth - cellPadding * 2,
-        align: "left",
-      });
-
-      doc
-        .moveTo(x, y)
-        .lineTo(x, y + rowHeight)
-        .strokeColor(borderColor)
-        .stroke();
-
-      x += columnWidth;
-    });
-    // final right-edge divider for this row
-    doc
-      .moveTo(x, y)
-      .lineTo(x, y + rowHeight)
-      .strokeColor(borderColor)
-      .stroke();
-
-    y += rowHeight;
+    drawRow({ cells, y, height, font: FONT_REGULAR, size: fontSize });
+    y += height;
   });
 
   /* ===============================
      FOOTER
   =============================== */
-  doc.moveDown(2);
+  y += 20;
+  if (y + 12 > bottomLimit()) {
+    doc.addPage();
+    y = MARGIN;
+  }
+
   doc
+    .font(FONT_REGULAR)
     .fontSize(9)
     .fillColor("gray")
-    .text("Confidential - Library Management System", {
+    .text("Confidential - Library Management System", MARGIN, y, {
+      width: pageWidth,
       align: "center",
     });
 
